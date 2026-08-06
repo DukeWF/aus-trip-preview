@@ -1,0 +1,43 @@
+# 外部停机兜底：本机整机停摆时，本机上的健康检查也一起死了、无人发声。
+# 这个 GitHub Actions 定时拨测跑在云端，检查线上 snapshot 的数据时间是否超龄
+# （正常每 6h 随抓价更新；>26h 未更新 = 本机大概率已停摆）。
+# 告警通道：job 失败 GitHub 自动发邮件；若仓库配了 FEISHU_WEBHOOK secret，再推一条飞书。
+name: 数据保鲜拨测
+
+on:
+  schedule:
+    - cron: "23 */6 * * *"   # 每 6 小时（UTC）
+  workflow_dispatch: {}       # 手动触发用于测试
+
+jobs:
+  stale-check:
+    runs-on: ubuntu-latest
+    steps:
+      - name: 检查 snapshot 数据时间
+        id: check
+        run: |
+          set -e
+          gen=$(curl -sf --max-time 30 https://trip.surl.cf/snapshot.json | \
+                python3 -c "import sys,json;print(json.load(sys.stdin)['meta']['generated_at'])")
+          echo "generated_at=$gen"
+          age_h=$(python3 - "$gen" <<'EOF'
+          import sys, datetime
+          gen = datetime.datetime.fromisoformat(sys.argv[1])
+          # 本机时区为北京时间(UTC+8)，snapshot 时间戳无时区标记
+          now = datetime.datetime.utcnow() + datetime.timedelta(hours=8)
+          print(f"{(now - gen).total_seconds() / 3600:.1f}")
+          EOF
+          )
+          echo "数据已 ${age_h}h 未更新"
+          echo "age_h=$age_h" >> "$GITHUB_OUTPUT"
+          python3 -c "import sys; sys.exit(0 if float('$age_h') <= 26 else 1)"
+
+      - name: 飞书告警（配置了 FEISHU_WEBHOOK secret 才推）
+        if: failure() && steps.check.outputs.age_h != ''
+        env:
+          HOOK: ${{ secrets.FEISHU_WEBHOOK }}
+        run: |
+          [ -z "$HOOK" ] && { echo "未配置 FEISHU_WEBHOOK，仅靠 GitHub 失败邮件"; exit 0; }
+          curl -sf --max-time 20 -H 'Content-Type: application/json' -d \
+            "{\"msg_type\":\"text\",\"content\":{\"text\":\"🚨 澳洲行监测停摆拨测：trip.surl.cf 数据已 ${{ steps.check.outputs.age_h }} 小时未更新（正常≤6h）。本机(抓价电脑)可能停机/断网/任务失效，请检查。\"}}" \
+            "$HOOK"
