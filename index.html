@@ -348,6 +348,8 @@
     <label class="flightonly">中转城市(可空)<input id="f_tc" placeholder="如 香港"/></label>
     <label class="flightonly">指定航班号(可空,逗号)<input id="f_tn" placeholder="HX231,HX017"/></label>
     <label class="flightonly">最大中转<select id="f_mt"><option value="">默认(≤1转)</option><option value="0">仅直飞</option><option value="1">≤1转</option><option value="2">≤2转</option></select><span class="hint">选「仅直飞」会给 FlyAI 传直达过滤，单独跟踪直飞价</span></label>
+    <label class="flightonly">起飞时段(可空)<input id="f_dh" placeholder="如 22-23"/><span class="hint">接驳段用：只认能接上后一程的班次</span></label>
+    <label class="flightonly">到达时段(可空)<input id="f_ah" placeholder="如 0-19"/><span class="hint">限**出发当日**到达；跨天到达不计</span></label>
     <label class="hotelonly">目标酒店关键词(可空,逗号)<input id="f_hn" placeholder="如 香格里拉"/><span class="hint">设了就只认这家：飞猪按名搜、RollingGo 按名取实时房价</span></label>
     <label class="hotelonly">星级下限(可空)<input id="f_hs" placeholder="如 4"/></label>
     <label>乘客/间夜<input id="f_pax" type="number" value="1" min="1"/></label>
@@ -714,7 +716,8 @@ function renderRuns(runs){
 function isDirect(w){return w.type==="flight"&&String(w.max_transfers??"")==="0";}
 function metaLine(w){
   if(w.type==="flight"){let s=`${w.origin||'?'} → ${w.destination||'?'} · ${w.date_start||'日期待定'}`;
-    if(w.date_end)s+=` ⇄ ${w.date_end}`;if(w.transfer_city)s+=` · 经${w.transfer_city}`;if(w.transport_no)s+=` · ✈${w.transport_no}`;return s;}
+    if(w.date_end)s+=` ⇄ ${w.date_end}`;if(w.transfer_city)s+=` · 经${w.transfer_city}`;if(w.transport_no)s+=` · ✈${w.transport_no}`;
+    if(w.dep_hours)s+=` · 起飞${w.dep_hours}时`;if(w.arr_hours)s+=` · 当日${w.arr_hours}时到`;return s;}
   return `${w.destination||''}${w.poi?'·'+w.poi:''} · ${w.date_start||''}~${w.date_end||''}`
     +(w.hotel_name?` · 🎯${w.hotel_name}`:'');
 }
@@ -909,6 +912,7 @@ function openForm(id){editingId=id||null;$("#formTitle").textContent=id?"编辑�
   $("#f_ds").value=w.date_start||"";$("#f_de").value=w.date_end||"";$("#f_tc").value=w.transfer_city||"";$("#f_tn").value=w.transport_no||"";
   // 这三项以前没进表单：一编辑就被后端整体覆盖成 null（直飞约束/目标酒店/星级悄悄丢失）
   $("#f_mt").value=w.max_transfers??"";$("#f_hn").value=w.hotel_name||"";$("#f_hs").value=w.hotel_stars||"";
+  $("#f_dh").value=w.dep_hours||"";$("#f_ah").value=w.arr_hours||"";
   $("#f_pax").value=w.passengers||1;$("#f_cabin").value=w.cabin||"economy";$("#f_target").value=w.target_price||"";$("#f_source").value=w.source||"flyai";$("#f_plan").value=w.plan||"";
   $("#suggest").innerHTML=(w.min_price)?`历史最低 ¥${Math.round(w.min_price)} <a href="#" onclick="$('#f_target').value=${Math.round(w.min_price)};return false;" style="color:var(--accent)">用作目标</a>`:"";
   onTypeChange();$("#mask").classList.add("show");}
@@ -918,6 +922,7 @@ async function saveForm(){const name=$("#f_name").value.trim();if(!name){toast("
     poi:$("#f_poi").value.trim()||null,date_start:$("#f_ds").value.trim()||null,date_end:$("#f_de").value.trim()||null,
     transfer_city:$("#f_tc").value.trim()||null,transport_no:$("#f_tn").value.trim()||null,
     max_transfers:$("#f_mt").value||null,hotel_name:$("#f_hn").value.trim()||null,hotel_stars:$("#f_hs").value.trim()||null,
+    dep_hours:$("#f_dh").value.trim()||null,arr_hours:$("#f_ah").value.trim()||null,
     passengers:parseInt($("#f_pax").value)||1,cabin:$("#f_cabin").value,target_price:$("#f_target").value?parseFloat($("#f_target").value):null,source:$("#f_source").value,plan:$("#f_plan").value||null,active:1};
   try{if(editingId)await api(`/api/watches/${editingId}`,{method:"PUT",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)});
     else await api(`/api/watches`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)});
