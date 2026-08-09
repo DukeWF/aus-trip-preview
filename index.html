@@ -255,6 +255,44 @@
     border:3px solid var(--line);border-top-color:#4c8dff;border-radius:50%;animation:spin .9s linear infinite;z-index:2}
   .imgload:not(.done) img{opacity:.25}
   @keyframes spin{to{transform:rotate(360deg)}}
+  /* ---- 今日 / 同行 ---- */
+  .dcard{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:9px 11px;margin-bottom:7px;cursor:pointer;transition:.15s}
+  .dcard:hover{border-color:var(--accent)}
+  .dcard.active{border-color:var(--accent);box-shadow:0 0 0 1px var(--accent) inset}
+  .dcard.isnow{border-color:var(--good)}
+  .dcard .dtop{display:flex;align-items:center;gap:7px;font-size:12.5px}
+  .dcard .dseq{color:var(--muted);font-size:11px;min-width:34px}
+  .dcard .dttl{font-weight:600;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .dcard .dsub{color:var(--muted);font-size:11.5px;margin-top:3px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .risk{font-size:10.5px;padding:1px 6px;border-radius:20px;border:1px solid var(--line);white-space:nowrap}
+  .risk.high{color:var(--bad);border-color:#7a2e2e}.risk.med{color:var(--warn);border-color:#7a6320}
+  .risk.low{color:var(--muted)}.risk.none{display:none}
+  .todaybar{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:10px}
+  .todaybar input[type=date]{width:auto;color-scheme:dark}
+  .cd{background:linear-gradient(135deg,#1b2330,#171a21);border:1px solid var(--line);border-radius:12px;padding:10px 13px;margin-bottom:10px}
+  .cd .cdn{font-size:20px;font-weight:700;color:var(--accent)}
+  .wxbox{background:var(--panel2);border:1px solid var(--line);border-radius:10px;padding:9px 12px;margin:10px 0;font-size:13px}
+  .wxbox .wxtag{font-size:11px;color:var(--muted);margin-left:6px}
+  .plan-box{border:1px solid var(--warn);background:rgba(255,176,32,.08);border-radius:10px;padding:10px 12px;margin:10px 0;font-size:13px;line-height:1.65}
+  .plan-box.crit{border-color:var(--bad);background:rgba(255,93,93,.09)}
+  .plan-box b{color:#ffd08a}
+  .sched{margin:10px 0}
+  .sched .srow{display:flex;gap:10px;padding:7px 0;border-bottom:1px dashed var(--line);font-size:13.5px;align-items:baseline}
+  .sched .srow:last-child{border:0}
+  .sched .st{color:var(--muted);font-variant-numeric:tabular-nums;min-width:52px;font-size:12.5px}
+  .sched .sk{font-size:10.5px;padding:0 6px;border-radius:20px;border:1px solid var(--line);color:var(--muted);white-space:nowrap}
+  .sched .sk.move{color:#7db3ff;border-color:#2f4d80}.sched .sk.fixed{color:#ffd86b;border-color:#7a6320}
+  .sched .sk.play{color:#8fe1b0;border-color:#2c5a42}.sched .sk.admin{color:#b7c0d0}
+  .sched .sx{flex:1;min-width:0}
+  .sched .wsun{color:var(--warn);font-size:11px}
+  .mcard .mrow{display:flex;align-items:center;gap:8px}
+  .mcard .mname{font-weight:600;flex:1}
+  .badge.appr{color:#8fe1b0;border-color:#2c5a42}.badge.pend{color:#ffb020;border-color:#7a6320}
+  .badge.rej{color:var(--bad);border-color:#7a2e2e}
+  .masknote{color:var(--muted);font-size:12px;margin:6px 0 0}
+  .fltab{width:100%;border-collapse:collapse;font-size:12.5px;margin-top:8px}
+  .fltab th,.fltab td{border-bottom:1px solid var(--line);padding:5px 7px;text-align:left;white-space:nowrap}
+  .fltab th{color:var(--muted);font-weight:500;font-size:11px}
   /* 出票演练清单：与下方 .doc 同宽同居中（此前满屏铺开，和正文左右错位） */
   .ckwrap{max-width:960px;margin:0 auto;padding:18px 28px 0}
   .ticketck{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:10px 14px}
@@ -277,7 +315,9 @@
 <header>
   <h1>🦘 2026·10 澳洲行</h1>
   <div class="tabs">
-    <div class="tab active" data-tab="monitor">✈️ 价格监测</div>
+    <div class="tab active" data-tab="today">📅 今日</div>
+    <div class="tab" data-tab="crew">👥 同行</div>
+    <div class="tab" data-tab="monitor">✈️ 价格监测</div>
     <div class="tab" data-tab="reflect">🔍 自省</div>
     <div class="tab" data-tab="itin">📋 行程</div>
     <div class="tab" data-tab="glance">📸 速览</div>
@@ -288,7 +328,7 @@
 </header>
 
 <!-- ===== 价格监测 ===== -->
-<div class="view active" id="view-monitor">
+<div class="view" id="view-monitor">
   <div class="layout">
     <div class="left">
       <div class="decision" id="decisionCard" style="display:none"></div>
@@ -305,6 +345,22 @@
       <div id="list"></div>
     </div>
     <div class="right" id="detail"><div class="empty">← 选择一个监测项查看价格走势</div></div>
+  </div>
+</div>
+
+<!-- ===== 今日 ===== -->
+<div class="view active" id="view-today">
+  <div class="layout">
+    <div class="left" id="dayList"></div>
+    <div class="right" id="dayDetail"><div class="empty">加载中…</div></div>
+  </div>
+</div>
+
+<!-- ===== 同行 ===== -->
+<div class="view" id="view-crew">
+  <div class="layout">
+    <div class="left" id="crewList"></div>
+    <div class="right" id="crewDetail"><div class="empty">← 选择一位同行成员</div></div>
   </div>
 </div>
 
@@ -393,6 +449,10 @@ function snapGet(u){                             // 把 GET /api/* 映射到 sna
   if(u==="/api/reflect/runs")return s.reflect_runs||[];
   if(u==="/api/runs")return s.runs||[];
   if(u==="/api/itinerary")return s.itinerary||{markdown:""};
+  if(u==="/api/members")return s.members||[];
+  if(u==="/api/days")return s.days||[];
+  if(u==="/api/weather")return s.weather||{};
+  if(u==="/api/today")return s.today||{index:[],day:null};
   return {};
 }
 /* 线上快照必须绕开缓存：GitHub Pages 对静态文件发 Cache-Control: max-age=600，
@@ -444,12 +504,176 @@ function switchTab(name){
   $("#hdrActions").innerHTML = acts[name] || (PREVIEW?verBadge():``);
   if(!PREVIEW&&name==="monitor"){$("#fetchAll").onclick=fetchAll;$("#addBtn").onclick=()=>openForm(null);}
   if(!PREVIEW&&name==="reflect"){$("#reflectRun").onclick=runReflect;$("#reflectRefresh").onclick=loadReflect;}
+  if(name==="today")loadToday(curDay);
+  if(name==="crew")loadCrew();
   if(name==="reflect")loadReflect();
   if(name==="itin")loadItinerary();
   if(name==="glance"){if(!PREVIEW){$("#genCard").onclick=genCard;$("#runResearch").onclick=runResearch;}loadGlance();}
   if(name==="map"&&!mapLoaded){watchImg($("#routemap"));$("#routemap").src=asset("routemap.svg","/api/routemap?t="+Date.now());mapLoaded=true;}
 }
 document.querySelectorAll(".tab").forEach(t=>t.onclick=()=>switchTab(t.dataset.tab));
+
+/* ---- 今日：左侧日历/日列表，右侧当日详情 ---- */
+const RISK_TXT={high:"🔴 强依赖天气",med:"🟡 部分靠天",low:"⚪ 天气影响小",none:""};
+const KIND_TXT={move:"交通",fixed:"定时",play:"游玩",meal:"用餐",admin:"事务"};
+let TODAY=null,curDay=null;
+/* 预览模式下 /api/today 的 query 会被快照层丢掉（只有一份静态结果），
+   所以线上换日期要在前端用 days+weather 自己拼，否则日历点了没反应。*/
+function todayFromSnap(want){
+  const days=(SNAP.days||[]),base=SNAP.today||{};
+  if(!days.length)return base;
+  const today=base.today||new Date().toISOString().slice(0,10);
+  const d=want||base.date||today;
+  let hit=days.find(x=>x.date===d),oor=!hit;
+  if(!hit)hit=d<days[0].date?days[0]:days[days.length-1];
+  const city=(hit.city||"").split("→")[0].trim();
+  const wx=(SNAP.weather||{})[`${city}|${hit.date}`]||null;
+  const fl=(base.date===hit.date?(base.flights||[]):[]);   // 快照只带了一天的航班
+  return {...base,date:hit.date,out_of_range:oor,day:hit,weather:wx,flights:fl,
+    weather_note:wx?`${wx.summary||"—"}〔${wx.kind==="forecast"?"预报":"气候均值(非预报)"}〕`:"",
+    index:days.map(x=>({date:x.date,seq:x.seq,city:x.city,title:x.title,weather_risk:x.weather_risk}))};
+}
+async function loadToday(d){
+  let t;
+  if(PREVIEW){t=todayFromSnap(d);}
+  else{try{t=await api("/api/today"+(d?`?date=${d}`:""));}catch(e){$("#dayDetail").innerHTML="加载失败："+e.message;return;}}
+  TODAY=t;curDay=t.date;
+  if(!t.index||!t.index.length){$("#dayList").innerHTML=`<div class="empty">还没有逐日行程</div>`;return;}
+  $("#dayList").innerHTML=`<div class="todaybar">
+      <input type="date" id="dPick" value="${t.date}" min="${t.range[0]}" max="${t.range[1]}"/>
+      <button id="dToday">回到今天</button></div>`
+    +t.index.map(x=>`<div class="dcard ${x.date===t.date?'active':''} ${x.date===t.today?'isnow':''}" data-d="${x.date}">
+      <div class="dtop"><span class="dseq">D${x.seq}</span><span class="dttl">${esc(x.title)}</span>
+        <span class="risk ${x.weather_risk}">${(RISK_TXT[x.weather_risk]||'').slice(0,2)}</span></div>
+      <div class="dsub">${x.date.slice(5)} · ${esc(x.city||'')}</div></div>`).join("");
+  $("#dPick").onchange=e=>loadToday(e.target.value);
+  $("#dToday").onclick=()=>loadToday(t.today);
+  $("#dayList").querySelectorAll(".dcard").forEach(c=>c.onclick=()=>loadToday(c.dataset.d));
+  renderDay(t);
+}
+function renderDay(t){
+  const d=t.day||{},items=d.items||[];
+  const cd=t.days_until_trip>0?`<div class="cd"><div style="color:var(--muted);font-size:12px">距出发还有</div>
+      <div class="cdn">${t.days_until_trip} 天</div></div>`:"";
+  const oor=t.out_of_range?`<div class="masknote">（今天不在行程区间内，已跳到最近的一天）</div>`:"";
+  const wx=t.weather_note?`<div class="wxbox">🌤️ ${esc(t.weather_note)}
+      ${(t.weather&&t.weather.kind==="climate")?`<span class="wxtag">还没进入预报窗口，这是历史同期均值、不是预报</span>`:""}</div>`:"";
+  const crit=/🔴|硬冲突/.test(d.contingency||"");
+  const plan=d.contingency?`<div class="plan-box ${crit?'crit':''}"><b>🧭 预案</b><br>${esc(d.contingency).replace(/\n/g,"<br>")}</div>`:"";
+  const sched=items.length?`<div class="sched">${items.map(i=>`<div class="srow">
+      <span class="st">${esc(i.time||'')}</span><span class="sk ${i.kind||''}">${KIND_TXT[i.kind]||''}</span>
+      <span class="sx">${esc(i.text||'')}${i.weather?' <span class="wsun">☂靠天</span>':''}${i.fixed?' <span class="wsun">⏰不可挪</span>':''}</span>
+    </div>`).join("")}</div>`:"";
+  const fl=(t.flights||[]).length?`<fieldset><legend>✈️ 当日航班（${t.flights.length}）</legend>
+    <table class="fltab"><thead><tr><th>成员</th><th>航班</th><th>航段</th><th>时刻</th></tr></thead><tbody>
+    ${t.flights.map(f=>`<tr><td>${esc(f.member)}${f.masked?' <span class="badge pend">待审核</span>':''}</td>
+      <td>${esc([f.carrier,f.flight_no].filter(Boolean).join(" ")||"—")}</td>
+      <td>${esc([f.from_name||f.from_code,f.to_name||f.to_code].filter(Boolean).join("→")||"—")}</td>
+      <td>${esc((f.dep_time||"").slice(11,16)||"—")}${f.arr_time?" → "+esc(f.arr_time.slice(5,16)):""}</td></tr>`).join("")}
+    </tbody></table></fieldset>`:"";
+  $("#dayDetail").innerHTML=`<button id="detailBack" onclick="closeDayDetail()">← 返回日期</button>
+    ${cd}${oor}
+    <div class="detail-head"><span class="badge">D${d.seq}</span><span class="risk ${d.weather_risk}">${RISK_TXT[d.weather_risk]||''}</span>
+      <h2>${esc(d.title||'')}</h2></div>
+    <div class="kv"><span>${d.date}</span><span>${esc(d.city||'')}</span></div>
+    <p style="color:var(--muted);font-size:13px">${esc(d.summary||'')}</p>
+    ${wx}${plan}${sched}${fl}`;
+  if(isMobile()){$("#dayDetail").classList.add("open");$("#dayDetail").scrollTop=0;}
+}
+function closeDayDetail(){$("#dayDetail").classList.remove("open");}
+
+/* ---- 同行成员 ---- */
+const MSTATUS={approved:["appr","已审核"],pending:["pend","待审核"],rejected:["rej","已拒绝"]};
+let CREW=[],curMember=null;
+async function loadCrew(){
+  try{CREW=await api("/api/members");}catch(e){$("#crewList").innerHTML="加载失败："+e.message;return;}
+  const add=PREVIEW?`<div class="masknote">线上为只读：如需加入，用「自助注册」把报文寄到 autrip@agent.qq.com，
+    审核通过后这里会显示完整信息。</div>`:`<div class="actions"><button class="primary" id="mAdd">＋ 新增成员</button>
+    <button id="mPoll">📮 收注册邮件</button></div>`;
+  $("#crewList").innerHTML=CREW.map(m=>{const[cls,txt]=MSTATUS[m.status]||MSTATUS.pending;
+    return `<div class="dcard mcard ${m.id===curMember?'active':''}" data-m="${m.id}"><div class="mrow">
+      <span class="mname">${esc(m.name)}</span><span class="badge ${cls}">${txt}</span></div>
+      <div class="dsub">${[m.home_city,m.gender,m.mbti].filter(Boolean).map(esc).join(" · ")||"—"}
+        · ${(m.flights||[]).length||m.n_flights||0} 段</div></div>`;}).join("")+add
+    +`<div class="actions"><button id="mReg">📝 自助注册</button></div>`;
+  $("#crewList").querySelectorAll(".dcard").forEach(c=>c.onclick=()=>showMember(+c.dataset.m));
+  if(!PREVIEW){const a=$("#mAdd");if(a)a.onclick=()=>editMember(null);
+    const p=$("#mPoll");if(p)p.onclick=pollMail;}
+  $("#mReg").onclick=showRegForm;
+  if(curMember)showMember(curMember);
+}
+function showMember(id){
+  curMember=id;loadCrewHighlight();
+  const m=CREW.find(x=>x.id===id);if(!m){$("#crewDetail").innerHTML=`<div class="empty">未找到</div>`;return;}
+  const[cls,txt]=MSTATUS[m.status]||MSTATUS.pending;
+  const masked=m.masked?`<div class="plan-box"><b>🔒 该成员尚未审核</b><br>
+    线上仅显示化名与状态；姓名、航班等信息通过审核后才会公开。共 ${m.n_flights||0} 个航段待核。</div>`:"";
+  const fl=(m.flights||[]).length?`<fieldset><legend>✈️ 个人航段</legend>
+    <table class="fltab"><thead><tr><th>日期</th><th>航班</th><th>航段</th><th>备注</th></tr></thead><tbody>
+    ${m.flights.map(f=>`<tr><td>${esc(f.date||'')}</td>
+      <td>${esc([f.carrier,f.flight_no].filter(Boolean).join(" "))}</td>
+      <td>${esc([f.from_name||f.from_code,f.to_name||f.to_code].filter(Boolean).join(" → "))}</td>
+      <td>${esc(f.note||f.arr_time||'')}</td></tr>`).join("")}</tbody></table></fieldset>`:"";
+  const acts=PREVIEW?"":`<div class="actions">
+    ${m.status!=="approved"?`<button class="primary" onclick="review(${m.id},'approved')">✅ 通过审核</button>`:""}
+    ${m.status!=="pending"?`<button onclick="review(${m.id},'pending')">↩ 转待审核</button>`:""}
+    ${m.status!=="rejected"?`<button class="danger" onclick="review(${m.id},'rejected')">✕ 拒绝</button>`:""}
+    <button class="danger" onclick="delMember(${m.id})">删除</button></div>`;
+  $("#crewDetail").innerHTML=`<button id="detailBack" onclick="$('#crewDetail').classList.remove('open')">← 返回</button>
+    <div class="detail-head"><span class="badge ${cls}">${txt}</span>
+      ${m.source==="selfreg"?'<span class="badge">自助注册</span>':''}<h2>${esc(m.name)}</h2></div>
+    <div class="kv"><span>出发地 <b>${esc(m.home_city||'—')}</b></span><span>性别 <b>${esc(m.gender||'—')}</b></span>
+      <span>MBTI <b>${esc(m.mbti||'—')}</b></span>${m.contact?`<span>联系 <b>${esc(m.contact)}</b>（仅本地）</span>`:''}</div>
+    ${m.note?`<p style="color:var(--muted);font-size:13px">${esc(m.note)}</p>`:""}
+    ${masked}${fl}${acts}`;
+  if(isMobile())$("#crewDetail").classList.add("open");
+}
+function loadCrewHighlight(){$("#crewList").querySelectorAll(".dcard").forEach(c=>
+  c.classList.toggle("active",+c.dataset.m===curMember));}
+async function review(id,status){
+  try{await api(`/api/members/${id}/review`,{method:"POST",headers:{"Content-Type":"application/json"},
+    body:JSON.stringify({status})});toast("已更新审核状态");await loadCrew();}
+  catch(e){toast("失败："+e.message,false);}}
+async function delMember(id){if(!confirm("确认删除该成员及其航段？"))return;
+  await api(`/api/members/${id}`,{method:"DELETE"});curMember=null;
+  $("#crewDetail").innerHTML=`<div class="empty">已删除</div>`;await loadCrew();}
+async function pollMail(){toast("收信中…");try{const r=await api("/api/mailbox/poll",{method:"POST"});
+  toast(`新邮件 ${r.checked}｜识别 ${r.parsed}｜新建待审核 ${r.created}`);await loadCrew();}
+  catch(e){toast("失败："+e.message,false);}}
+function editMember(){showRegForm(true);}
+/* 自助注册表单：线上没有后端，填完生成报文 → 邮寄/粘贴转一手 */
+function showRegForm(local){
+  const mail="autrip@agent.qq.com";
+  $("#crewDetail").innerHTML=`<div class="detail-head"><h2>📝 ${local?"新增成员":"自助注册"}</h2></div>
+    <p style="color:var(--muted);font-size:13px">填完生成一段注册报文。${local?"":`线上是只读静态站，
+      请把报文<b>邮寄到 ${mail}</b>（或直接发给行程发起人），本地收到后进入<b>待审核</b>，
+      通过后你的信息才会在这里完整显示。`}</p>
+    <div class="form-grid">
+      <label>姓名 *<input id="r_name" placeholder="如 Duke"/></label>
+      <label>性别<input id="r_gender" placeholder="男 / 女 / 其他"/></label>
+      <label>MBTI<input id="r_mbti" placeholder="如 ENFP"/></label>
+      <label>出发地<input id="r_city" placeholder="上海 / 杭州"/></label>
+      <label>联系方式（仅本地可见，不公开）<input id="r_contact" placeholder="邮箱或手机"/></label>
+      <label>备注<input id="r_note" placeholder="如 中国出入境段待定"/></label>
+    </div>
+    <div class="actions"><button class="primary" id="rGen">生成报文</button>
+      ${local?`<button id="rSave">直接入库(待审核)</button>`:""}</div>
+    <fieldset id="rOut" style="display:none"><legend>注册报文</legend>
+      <textarea id="rText" rows="10" style="width:100%;font-family:ui-monospace,Consolas,monospace;font-size:12px"></textarea>
+      <div class="actions"><button id="rCopy">📋 复制</button><button id="rMail">✉️ 用邮件发送</button></div></fieldset>`;
+  const grab=()=>({name:$("#r_name").value.trim(),gender:$("#r_gender").value.trim(),
+    mbti:$("#r_mbti").value.trim(),home_city:$("#r_city").value.trim(),
+    contact:$("#r_contact").value.trim(),note:$("#r_note").value.trim(),flights:[]});
+  const payload=()=>"AUSTRIP-REG-BEGIN\n"+JSON.stringify(grab(),null,1)+"\nAUSTRIP-REG-END";
+  $("#rGen").onclick=()=>{if(!$("#r_name").value.trim()){toast("请填姓名",false);return;}
+    $("#rOut").style.display="";$("#rText").value=payload();};
+  $("#rCopy").onclick=()=>{navigator.clipboard.writeText($("#rText").value).then(()=>toast("已复制"),()=>toast("复制失败",false));};
+  $("#rMail").onclick=()=>{location.href=`mailto:${mail}?subject=${encodeURIComponent("澳洲行 自助注册")}&body=${encodeURIComponent($("#rText").value)}`;};
+  const s=$("#rSave");if(s)s.onclick=async()=>{
+    try{const r=await api("/api/members/register",{method:"POST",headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({payload:payload()})});toast(r.created?`已建待审核：${r.name}`:`已存在同名：${r.name}`);
+      await loadCrew();}catch(e){toast("失败："+e.message,false);}};
+}
 
 /* ---- 行程 + 出票演练清单 ---- */
 const TICKET_CK=[["出票前 · 比价与合规",[
@@ -930,7 +1154,7 @@ async function saveForm(){const name=$("#f_name").value.trim();if(!name){toast("
 async function delWatch(id){if(!confirm("确认删除该监测项及其历史？"))return;await api(`/api/watches/${id}`,{method:"DELETE"});
   selectedId=null;closeDetail();$("#detail").innerHTML=`<div class="empty">已删除</div>`;toast("已删除");await refresh();}
 
-(async()=>{ if(PREVIEW)await loadSnapshot(); switchTab("monitor"); skeleton(); await refresh();
+(async()=>{ if(PREVIEW)await loadSnapshot(); switchTab("today"); skeleton(); await refresh();
   const w=+new URLSearchParams(location.search).get("w");   // 深链 ?w=<id> 直达某监测项（移动端亦可分享）
   if(w&&watches.some(x=>x.id===w))selectWatch(w);
 })();
