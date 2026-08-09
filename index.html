@@ -608,12 +608,19 @@ function showMember(id){
   const[cls,txt]=MSTATUS[m.status]||MSTATUS.pending;
   const masked=m.masked?`<div class="plan-box"><b>🔒 该成员尚未审核</b><br>
     线上仅显示化名与状态；姓名、航班等信息通过审核后才会公开。共 ${m.n_flights||0} 个航段待核。</div>`:"";
-  const fl=(m.flights||[]).length?`<fieldset><legend>✈️ 个人航段</legend>
-    <table class="fltab"><thead><tr><th>日期</th><th>航班</th><th>航段</th><th>备注</th></tr></thead><tbody>
-    ${m.flights.map(f=>`<tr><td>${esc(f.date||'')}</td>
+  const fl=(m.flights||[]).length?`<fieldset><legend>✈️ 个人航段（🎫=已出票，成交价用于算改签净收益）</legend>
+    <table class="fltab"><thead><tr><th>日期</th><th>航班</th><th>航段</th><th>状态</th><th>成交价/人</th><th>改签费</th></tr></thead><tbody>
+    ${m.flights.map((f,i)=>`<tr><td>${esc(f.date||'')}</td>
       <td>${esc([f.carrier,f.flight_no].filter(Boolean).join(" "))}</td>
       <td>${esc([f.from_name||f.from_code,f.to_name||f.to_code].filter(Boolean).join(" → "))}</td>
-      <td>${esc(f.note||f.arr_time||'')}</td></tr>`).join("")}</tbody></table></fieldset>`:"";
+      <td>${f.booked?'🎫已出票':'⏳未定'}</td>
+      <td>${PREVIEW?(f.paid_price?'¥'+Math.round(f.paid_price):'—')
+        :`<input type="number" class="fpaid" data-i="${i}" value="${f.paid_price??''}" placeholder="待补" style="width:82px"/>`}</td>
+      <td>${PREVIEW?(f.change_fee?'¥'+Math.round(f.change_fee):'默认')
+        :`<input type="number" class="ffee" data-i="${i}" value="${f.change_fee??''}" placeholder="默认400" style="width:78px"/>`}</td>
+      </tr>`).join("")}</tbody></table>
+    ${PREVIEW?'':`<div class="actions"><button class="primary" onclick="savePaid(${m.id})">💾 保存成交价</button></div>`}
+    </fieldset>`:"";
   const acts=PREVIEW?"":`<div class="actions">
     ${m.status!=="approved"?`<button class="primary" onclick="review(${m.id},'approved')">✅ 通过审核</button>`:""}
     ${m.status!=="pending"?`<button onclick="review(${m.id},'pending')">↩ 转待审核</button>`:""}
@@ -630,6 +637,18 @@ function showMember(id){
 }
 function loadCrewHighlight(){$("#crewList").querySelectorAll(".dcard").forEach(c=>
   c.classList.toggle("active",+c.dataset.m===curMember));}
+/* 成交价/改签费录入：rebook 的净收益全靠这两个数，没有就只能提示"待补" */
+async function savePaid(mid){
+  const m=CREW.find(x=>x.id===mid);if(!m)return;
+  const fl=(m.flights||[]).map(f=>({...f}));
+  document.querySelectorAll(".fpaid").forEach(el=>{const i=+el.dataset.i;
+    fl[i].paid_price=el.value.trim()===""?null:parseFloat(el.value);});
+  document.querySelectorAll(".ffee").forEach(el=>{const i=+el.dataset.i;
+    fl[i].change_fee=el.value.trim()===""?null:parseFloat(el.value);});
+  try{await api(`/api/members/${mid}`,{method:"PUT",headers:{"Content-Type":"application/json"},
+    body:JSON.stringify({...m,flights:fl})});
+    toast("成交价已保存");await loadCrew();}
+  catch(e){toast("保存失败："+e.message,false);}}
 async function review(id,status){
   try{await api(`/api/members/${id}/review`,{method:"POST",headers:{"Content-Type":"application/json"},
     body:JSON.stringify({status})});toast("已更新审核状态");await loadCrew();}
@@ -842,6 +861,13 @@ async function refresh(){
 const DEC_ACT={ready:["🟢 可考虑出票","ready"],watch:["⚪ 观望","watch"],wait:["🔴 建议再等","wait"]};
 function renderDecision(d){
   const el=$("#decisionCard");if(!el)return;
+  if(d&&d.decided){          // 已定案且出票：不再显示"该不该出票"，改说明口径已切换
+    el.style.display="block";el.className="decision ok";
+    el.innerHTML=`<div class="dh">🎫 ${esc(d.headline)}<span class="dact ok">已出票</span></div>
+      <div class="dadv">${esc(d.advice||'')}</div>
+      ${(d.notes||[]).length?`<ul>${d.notes.map(n=>`<li>${esc(n)}</li>`).join("")}</ul>`:""}
+      <div class="snote" style="margin-top:6px">A/B 方案比价已停用；改签建议见「同行」页各成员航段</div>`;
+    return;}
   if(!d||!d.ready){el.style.display="none";return;}
   el.style.display="block";
   const[lab,cls]=DEC_ACT[d.action]||DEC_ACT.watch;
