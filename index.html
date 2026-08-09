@@ -620,18 +620,15 @@ function showMember(id){
   const masked=m.masked?`<div class="plan-box"><b>🔒 该成员尚未审核</b><br>
     线上仅显示化名与状态；姓名、航班等信息通过审核后才会公开。共 ${m.n_flights||0} 个航段待核。</div>`:"";
   const fl=(m.flights||[]).length?`<fieldset><legend>✈️ 个人航段（🎫=已出票，成交价用于算改签净收益）</legend>
-    <table class="fltab"><thead><tr><th>日期</th><th>航班</th><th>航段</th><th>状态</th><th>成交价/人</th><th>改签费</th></tr></thead><tbody>
+    <table class="fltab"><thead><tr><th>日期</th><th>航班</th><th>航段</th><th>状态</th><th>成交价/人</th><th>改签费</th><th></th></tr></thead><tbody>
     ${m.flights.map((f,i)=>`<tr><td>${esc(f.date||'')}</td>
       <td>${esc([f.carrier,f.flight_no].filter(Boolean).join(" "))}</td>
       <td>${esc([f.from_name||f.from_code,f.to_name||f.to_code].filter(Boolean).join(" → "))}</td>
       <td>${f.booked?'🎫已出票':'⏳未定'}</td>
-      <td>${PREVIEW?(f.paid_price?'¥'+Math.round(f.paid_price):'—')
-        :`<input type="number" class="fpaid" data-i="${i}" value="${f.paid_price??''}" placeholder="待补" style="width:82px"/>`}</td>
-      <td>${PREVIEW?(f.change_fee?'¥'+Math.round(f.change_fee):'默认')
-        :`<input type="number" class="ffee" data-i="${i}" value="${f.change_fee??''}" placeholder="默认400" style="width:78px"/>`}</td>
-      </tr>`).join("")}</tbody></table>
-    ${PREVIEW?'':`<div class="actions"><button class="primary" onclick="savePaid(${m.id})">💾 保存成交价</button></div>`}
-    </fieldset>`:"";
+      <td>${f.paid_price?'¥'+Math.round(f.paid_price):'<span class="hint">待补</span>'}</td>
+      <td>${f.change_fee!=null?'¥'+Math.round(f.change_fee):'<span class="hint">默认¥400</span>'}</td>
+      <td>${PREVIEW?'':`<span class="tgt-edit" onclick="fareForm(${m.id},${i})">✎ 编辑</span>`}</td>
+      </tr>`).join("")}</tbody></table></fieldset>`:"";
   const acts=PREVIEW?"":`<div class="actions">
     ${m.status!=="approved"?`<button class="primary" onclick="review(${m.id},'approved')">✅ 通过审核</button>`:""}
     ${m.status!=="pending"?`<button onclick="review(${m.id},'pending')">↩ 转待审核</button>`:""}
@@ -648,18 +645,48 @@ function showMember(id){
 }
 function loadCrewHighlight(){$("#crewList").querySelectorAll(".dcard").forEach(c=>
   c.classList.toggle("active",+c.dataset.m===curMember));}
-/* 成交价/改签费录入：rebook 的净收益全靠这两个数，没有就只能提示"待补" */
-async function savePaid(mid){
+/* 成交价/改签费：改成独立编辑窗格 —— 表格里塞裸 input 既难点又容易误改隔壁行。
+   能枚举的（改签费）一律给下拉；成交价给"参考当前市场价"的一键填入。*/
+function fareForm(mid,idx){
   const m=CREW.find(x=>x.id===mid);if(!m)return;
-  const fl=(m.flights||[]).map(f=>({...f}));
-  document.querySelectorAll(".fpaid").forEach(el=>{const i=+el.dataset.i;
-    fl[i].paid_price=el.value.trim()===""?null:parseFloat(el.value);});
-  document.querySelectorAll(".ffee").forEach(el=>{const i=+el.dataset.i;
-    fl[i].change_fee=el.value.trim()===""?null:parseFloat(el.value);});
-  try{await api(`/api/members/${mid}`,{method:"PUT",headers:{"Content-Type":"application/json"},
-    body:JSON.stringify({...m,flights:fl})});
-    toast("成交价已保存");await loadCrew();}
-  catch(e){toast("保存失败："+e.message,false);}}
+  const f=(m.flights||[])[idx];if(!f)return;
+  const mkt=(watches.find(w=>w.id===f.watch_id)||{}).latest;
+  const feeCustom=f.change_fee!=null&&!FEE_OPTS.some(o=>o[0]===String(f.change_fee));
+  $("#crewDetail").innerHTML=`<div class="detail-head"><h2>✎ ${esc(f.flight_no||'')} 出票信息</h2>
+      <span class="badge">${esc(m.name)}</span></div>
+    <div class="kv"><span>${esc(f.date||'')}</span>
+      <span>${esc([f.from_name||f.from_code,f.to_name||f.to_code].filter(Boolean).join(" → "))}</span>
+      <span>${esc(f.carrier||'')}</span></div>
+    <div class="form-grid">
+      <label>出票状态${sel("k_booked",[["1","🎫 已出票"],["0","⏳ 未出票"]],f.booked?"1":"0")}</label>
+      <label>成交价 / 人（¥）<input id="k_paid" type="number" step="1" value="${f.paid_price??''}" placeholder="含税实付"/>
+        ${mkt?`<span class="hint">当前市场价 ¥${Math.round(mkt.price)} · <a href="#" onclick="$('#k_paid').value=${Math.round(mkt.price)};return false;" style="color:var(--accent)">填入参考</a></span>`
+             :`<span class="hint">该航段暂无市场价可参考</span>`}</label>
+      <label>改签手续费 / 人${sel("k_fee",FEE_OPTS,feeCustom?"__x":(f.change_fee==null?"":String(f.change_fee)))}
+        <input id="k_feex" type="number" placeholder="自定义金额" value="${feeCustom?f.change_fee:''}" style="display:${feeCustom?'':'none'};margin-top:4px"/></label>
+      <label>订单号 / PNR<input id="k_pnr" value="${esc(f.pnr||'')}" placeholder="可空"/>
+        <span class="hint">🔒 仅本地保存，**绝不**进公开站</span></label>
+      <label>备注<input id="k_note" value="${esc(f.note||'')}" placeholder="可空"/></label>
+    </div>
+    <div class="actions"><button class="primary" id="kSave">保存</button>
+      <button onclick="showMember(${mid})">取消</button></div>
+    <div class="masknote">成交价是「改签净收益 = 成交价 − 现价 − 改签费」的基准，没有它就算不出建议。</div>`;
+  // 用事件绑定而不是内联 onchange：属性里再套引号极易被转义规则搞塌
+  $("#k_fee").onchange=e=>{$("#k_feex").style.display=e.target.value==="__x"?"":"none";};
+  $("#kSave").onclick=async()=>{
+    const fl=(m.flights||[]).map(x=>({...x}));
+    const feeSel=$("#k_fee").value;
+    fl[idx].booked=+$("#k_booked").value;
+    fl[idx].paid_price=$("#k_paid").value.trim()===""?null:parseFloat($("#k_paid").value);
+    fl[idx].change_fee=feeSel===""?null:(feeSel==="__x"
+      ?($("#k_feex").value.trim()===""?null:parseFloat($("#k_feex").value)):parseFloat(feeSel));
+    fl[idx].pnr=$("#k_pnr").value.trim()||null;
+    fl[idx].note=$("#k_note").value.trim()||null;
+    try{await api(`/api/members/${mid}`,{method:"PUT",headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({...m,flights:fl})});
+      toast("已保存");await loadCrew();showMember(mid);}
+    catch(e){toast("保存失败："+e.message,false);}};
+}
 async function review(id,status){
   try{await api(`/api/members/${id}/review`,{method:"POST",headers:{"Content-Type":"application/json"},
     body:JSON.stringify({status})});toast("已更新审核状态");await loadCrew();}
@@ -680,9 +707,9 @@ function showRegForm(local){
       通过后你的信息才会在这里完整显示。`}</p>
     <div class="form-grid">
       <label>姓名 *<input id="r_name" placeholder="如 Duke"/></label>
-      <label>性别<input id="r_gender" placeholder="男 / 女 / 其他"/></label>
-      <label>MBTI<input id="r_mbti" placeholder="如 ENFP"/></label>
-      <label>出发地<input id="r_city" placeholder="上海 / 杭州"/></label>
+      <label>性别${sel("r_gender",["","男","女","其他"],"")}</label>
+      <label>MBTI${sel("r_mbti",[""].concat(MBTI),"")}</label>
+      <label>出发地${sel("r_city",["","上海","杭州","北京","广州","深圳","其他"],"")}</label>
       <label>联系方式（仅本地可见，不公开）<input id="r_contact" placeholder="邮箱或手机"/></label>
       <label>备注<input id="r_note" placeholder="如 中国出入境段待定"/></label>
     </div>
@@ -727,7 +754,11 @@ async function unlockLedger(env,pass){
   }
   throw new Error("口令不匹配任何一份授权");
 }
+let DAYS_CACHE=null;
 async function loadBill(){
+  // 记账表单要用到成员(付款人/参与人)与行程日期；账单页可能是首屏，不能假设别的页先加载过
+  if(!CREW.length){try{CREW=await api("/api/members");}catch(e){}}
+  if(!DAYS_CACHE){try{DAYS_CACHE=await api("/api/days");}catch(e){DAYS_CACHE=[];}}
   if(!PREVIEW){                       // 本地：直接读明文，不必解密
     try{const d=await api("/api/ledger");LEDGER=d;renderBill(d,null);}
     catch(e){$("#billMain").innerHTML="加载失败："+e.message;}
@@ -781,6 +812,76 @@ function renderBill(L,grant){
   if(isMobile())$("#billMain").classList.add("open");
 }
 const SPLIT_TXT={equal:"均摊",shares:"按份额",exact:"指定金额"};
+/* 下拉优先：能枚举的一律用 select，少让人手打、也少打错 */
+const MBTI=["INTJ","INTP","ENTJ","ENTP","INFJ","INFP","ENFJ","ENFP","ISTJ","ISFJ","ESTJ","ESFJ","ISTP","ISFP","ESTP","ESFP","I人","E人"];
+const CATS=["机票","住宿","餐饮","交通","门票/活动","购物","其他"];
+const CURS=[["AUD","AUD 澳元"],["CNY","CNY 人民币"]];
+const FEE_OPTS=[["","按默认 ¥400"],["0","免费改签 ¥0"],["200","¥200"],["400","¥400"],
+                ["600","¥600"],["800","¥800"],["1000","¥1000"],["__x","自定义…"]];
+function sel(id,opts,cur,extra){return `<select id="${id}" ${extra||''}>`+opts.map(o=>{
+  const[v,t]=Array.isArray(o)?o:[o,o];
+  return `<option value="${esc(v)}" ${String(cur??'')===String(v)?'selected':''}>${esc(t)}</option>`;}).join("")+`</select>`;}
+function todayStr(){return new Date().toISOString().slice(0,10);}
+
+function expenseForm(){
+  const ms=CREW.filter(m=>!m.masked);
+  const opts=ms.map(m=>[m.id,m.name]);
+  $("#billMain").innerHTML=`<div class="detail-head"><h2>＋ 记一笔</h2></div>
+    <div class="form-grid">
+      <label>日期${sel("e_date",[[todayStr(),todayStr()+" · 今天"]].concat((DAYS_CACHE||[]).map(d=>[d.date,`${d.date} · ${d.city||""}`])),todayStr())}</label>
+      <label>类别${sel("e_cat",CATS,"餐饮")}</label>
+      <label>项目<input id="e_title" placeholder="如 大堡礁出海"/></label>
+      <label>金额<input id="e_amt" type="number" step="0.01" placeholder="0.00"/></label>
+      <label>币种${sel("e_cur",CURS,"AUD")}<span class="hint">按记账当日汇率折 CNY 并锁定</span></label>
+      <label>付款人${sel("e_payer",opts,ms[0]&&ms[0].id)}</label>
+      <label>分摊方式${sel("e_split",[["equal","均摊"],["shares","按份额"]],"equal",'onchange="renderShares()"')}</label>
+      <label>备注<input id="e_note" placeholder="可空"/></label>
+    </div>
+    <fieldset><legend>参与人</legend><div id="e_who"></div></fieldset>
+    <div class="actions"><button class="primary" id="eSave">保存</button><button onclick="loadBill()">取消</button></div>`;
+  window.renderShares=()=>{
+    const mode=$("#e_split").value;
+    $("#e_who").innerHTML=ms.map(m=>`<label class="ck"><input type="checkbox" class="ewho" data-id="${m.id}" checked/>
+      <span>${esc(m.name)}</span>${mode==="shares"?`　份额 ${sel("esh_"+m.id,[1,2,3,4],1)}`:''}</label>`).join("");};
+  renderShares();
+  $("#eSave").onclick=async()=>{
+    const title=$("#e_title").value.trim(),amt=parseFloat($("#e_amt").value);
+    if(!title||!amt){toast("请填项目与金额",false);return;}
+    const who=[...document.querySelectorAll(".ewho:checked")].map(c=>+c.dataset.id);
+    if(!who.length){toast("至少选一位参与人",false);return;}
+    const mode=$("#e_split").value;
+    const shares=mode==="shares"?Object.fromEntries(who.map(i=>[i,+($("#esh_"+i)||{value:1}).value])):who;
+    try{await api("/api/ledger/expense",{method:"POST",headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({date:$("#e_date").value,title,category:$("#e_cat").value,
+        amount:amt,currency:$("#e_cur").value,payer_id:+$("#e_payer").value,
+        split:mode,shares,note:$("#e_note").value.trim()||null})});
+      toast("已记账");LEDGER=null;loadBill();}
+    catch(e){toast("失败："+e.message,false);}};
+}
+function grantForm(){
+  const ms=CREW.filter(m=>!m.masked);
+  $("#billMain").innerHTML=`<div class="detail-head"><h2>🔑 发放 / 重置账单口令</h2></div>
+    <p style="color:var(--muted);font-size:13px">口令用于在**线上**解密账单。重置会让该成员的旧口令立即失效。
+      <b>明文口令只显示这一次</b>，本地不保存——请立刻复制或用邮件发给他。</p>
+    <div class="form-grid">
+      <label>成员${sel("g_m",ms.map(m=>[m.id,m.name]),ms[0]&&ms[0].id)}</label>
+      <label>角色${sel("g_r",[["member","member（可看账单）"],["admin","admin（可看账单+本地可编辑）"]],"member")}</label>
+    </div>
+    <div class="actions"><button class="primary" id="gGo">生成口令</button><button onclick="loadBill()">返回</button></div>
+    <fieldset id="gOut" style="display:none"><legend>口令（只显示这一次）</legend>
+      <div id="gPass" style="font-family:ui-monospace,Consolas,monospace;font-size:18px;letter-spacing:1px;padding:8px 0"></div>
+      <div class="actions"><button id="gCopy">📋 复制</button><button id="gMail">✉️ 邮件发送</button></div></fieldset>`;
+  $("#gGo").onclick=async()=>{
+    try{const r=await api("/api/ledger/grant",{method:"POST",headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({member_id:+$("#g_m").value,role:$("#g_r").value})});
+      $("#gOut").style.display="";$("#gPass").textContent=r.passphrase;
+      $("#gCopy").onclick=()=>navigator.clipboard.writeText(r.passphrase).then(()=>toast("已复制"));
+      $("#gMail").onclick=()=>{const m=CREW.find(x=>x.id===r.member_id)||{};
+        location.href=`mailto:${m.contact||""}?subject=${encodeURIComponent("澳洲行 账单口令")}&body=${encodeURIComponent(
+          `你的账单口令：${r.passphrase}\n\n在 https://trip.surl.cf 的「💰 账单」页输入即可查看。\n口令只发这一次，请妥善保存；丢失可让发起人重置。`)}`;};
+      toast("已生成，记得立刻发出");}
+    catch(e){toast("失败："+e.message,false);}};
+}
 
 /* ---- 行程 + 出票演练清单 ---- */
 const TICKET_CK=[["出票前 · 比价与合规",[
