@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="zh-CN">
 <head>
-<script>window.PREVIEW=true;window.BUILD="20260810232756"</script>
+<script>window.PREVIEW=true;window.BUILD="20260811001141"</script>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
 <title>2026·10 澳洲行 · 行程与价格监测</title>
@@ -426,6 +426,9 @@
   <div class="actions"><button class="primary" onclick="saveForm()">保存</button><button onclick="closeForm()">取消</button></div>
 </div></div>
 
+<!-- 高危操作的二次确认（独立 mask，避免和监测项表单抢同一个容器） -->
+<div class="mask" id="totpMask"><div class="modal" id="totpModal"></div></div>
+
 <div class="toast" id="toast"></div>
 
 <script>
@@ -513,9 +516,48 @@ async function api(u,o){
   }
   progStart();
   try{
-    const r=await fetch(u,o);if(!r.ok&&r.status>=400&&r.status!==202)throw new Error((await r.text())||r.status);
+    const r=await fetch(u,o);
+    if(!r.ok&&r.status>=400&&r.status!==202){
+      // FastAPI 的报错体是 {"detail":"…"}。原样抛出会让用户看到一串 JSON，
+      // 而闸门要靠 status 判断"是不是缺验证码"，所以两样都得留下。
+      const raw=await r.text();let msg=raw;
+      try{const j=JSON.parse(raw);msg=j.detail||raw;}catch(e){}
+      const err=new Error(msg||r.status);err.status=r.status;throw err;
+    }
     return r.headers.get("content-type")?.includes("json")?r.json():r.text();
   }finally{progEnd();}
+}
+/* 高危操作：先照常发，被闸门拦下(401/429 且提到验证码)就弹框要 6 位码再重发。
+   这样闸门没开时零摩擦——没人绑定 TOTP 的话，这个分支永远走不到。 */
+async function gapi(u,o,label){
+  o=o||{};
+  try{return await api(u,o);}
+  catch(e){
+    if(!(e.status===401||e.status===429)||!/TOTP|验证码/.test(e.message||""))throw e;
+    const code=await askTotp(label,e.message);
+    if(!code)throw new Error("已取消");
+    return await api(u,{...o,headers:{...(o.headers||{}),"X-TOTP":code}});
+  }
+}
+function askTotp(label,why){
+  return new Promise(res=>{
+    const mask=$("#totpMask");
+    $("#totpModal").innerHTML=`<h3>🔐 二次确认</h3>
+      <p style="color:var(--muted);font-size:13px;margin:0 0 4px">即将执行：<b>${esc(label||"高危操作")}</b></p>
+      <p style="color:var(--warn);font-size:12.5px;margin:0 0 12px">${esc(why||"")}</p>
+      <div class="form-grid"><label>验证器 6 位码
+        <input id="tgCode" inputmode="numeric" maxlength="6" autocomplete="one-time-code"
+          placeholder="000000" style="letter-spacing:6px;font-size:20px;text-align:center"/></label></div>
+      <div class="actions"><button class="primary" id="tgOk">确认</button><button id="tgNo">取消</button></div>
+      <div class="masknote">码在 Google Authenticator 等 App 里，30 秒一变。连错 5 次锁 5 分钟。</div>`;
+    mask.classList.add("show");
+    const done=v=>{mask.classList.remove("show");res(v);};
+    const inp=$("#tgCode");inp.focus();
+    inp.oninput=()=>{inp.value=inp.value.replace(/\D/g,"");if(inp.value.length===6)$("#tgOk").click();};
+    $("#tgOk").onclick=()=>done(inp.value.trim());
+    $("#tgNo").onclick=()=>done(null);
+    mask.onclick=e=>{if(e.target===mask)done(null);};
+  });
 }
 if("serviceWorker" in navigator){window.addEventListener("load",()=>navigator.serviceWorker.register("/sw.js").catch(()=>{}));}
 
@@ -616,6 +658,7 @@ const MSTATUS={approved:["appr","已审核"],pending:["pend","待审核"],reject
 let CREW=[],curMember=null;
 async function loadCrew(){
   try{CREW=await api("/api/members");}catch(e){$("#crewList").innerHTML="加载失败："+e.message;return;}
+  if(!PREVIEW&&!TOTP)await loadTotp();     // 只为在名字旁标出"谁是闸门钥匙"
   const add=PREVIEW?`<div class="masknote">线上为只读：如需加入，用「自助注册」把报文寄到 autrip@agent.qq.com，
     审核通过后这里会显示完整信息。</div>`:`<div class="actions"><button class="primary" id="mAdd">＋ 新增成员</button>
     <button id="mPoll">📮 收注册邮件</button></div>`;
@@ -651,10 +694,12 @@ function showMember(id){
     ${m.status!=="approved"?`<button class="primary" onclick="review(${m.id},'approved')">✅ 通过审核</button>`:""}
     ${m.status!=="pending"?`<button onclick="review(${m.id},'pending')">↩ 转待审核</button>`:""}
     ${m.status!=="rejected"?`<button class="danger" onclick="review(${m.id},'rejected')">✕ 拒绝</button>`:""}
+    <button onclick="totpPanel(${m.id})">🔐 二次验证</button>
     <button class="danger" onclick="delMember(${m.id})">删除</button></div>`;
+  const tb=PREVIEW||!totpOf(m.id).bound_at?"":'<span class="badge appr">🔐 已绑定</span>';
   $("#crewDetail").innerHTML=`<button id="detailBack" onclick="$('#crewDetail').classList.remove('open')">← 返回</button>
     <div class="detail-head"><span class="badge ${cls}">${txt}</span>
-      ${m.source==="selfreg"?'<span class="badge">自助注册</span>':''}<h2>${esc(m.name)}</h2></div>
+      ${m.source==="selfreg"?'<span class="badge">自助注册</span>':''}${tb}<h2>${esc(m.name)}</h2></div>
     <div class="kv"><span>出发地 <b>${esc(m.home_city||'—')}</b></span><span>性别 <b>${esc(m.gender||'—')}</b></span>
       <span>MBTI <b>${esc(m.mbti||'—')}</b></span>${m.contact?`<span>联系 <b>${esc(m.contact)}</b>（仅本地）</span>`:''}</div>
     ${m.note?`<p style="color:var(--muted);font-size:13px">${esc(m.note)}</p>`:""}
@@ -706,12 +751,73 @@ function fareForm(mid,idx){
     catch(e){toast("保存失败："+e.message,false);}};
 }
 async function review(id,status){
-  try{await api(`/api/members/${id}/review`,{method:"POST",headers:{"Content-Type":"application/json"},
-    body:JSON.stringify({status})});toast("已更新审核状态");await loadCrew();}
+  const m=CREW.find(x=>x.id===id)||{};
+  try{const r=await gapi(`/api/members/${id}/review`,{method:"POST",headers:{"Content-Type":"application/json"},
+    body:JSON.stringify({status})},`审核通过 ${m.name||"#"+id}（信息即刻公开）`);
+    toast(r&&r.notify?r.notify:"已更新审核状态");await loadCrew();}
   catch(e){toast("失败："+e.message,false);}}
-async function delMember(id){if(!confirm("确认删除该成员及其航段？"))return;
-  await api(`/api/members/${id}`,{method:"DELETE"});curMember=null;
-  $("#crewDetail").innerHTML=`<div class="empty">已删除</div>`;await loadCrew();}
+async function delMember(id){
+  const m=CREW.find(x=>x.id===id)||{};
+  if(!confirm("确认删除该成员及其航段？"))return;
+  try{await gapi(`/api/members/${id}`,{method:"DELETE"},`删除成员 ${m.name||"#"+id}`);
+    curMember=null;$("#crewDetail").innerHTML=`<div class="empty">已删除</div>`;await loadCrew();}
+  catch(e){toast("失败："+e.message,false);}}
+
+/* ---- 🔐 TOTP 绑定：闸门的钥匙。密钥只在这一次响应里出现，不落盘、不进快照。 ---- */
+let TOTP=null;
+async function loadTotp(){try{TOTP=await api("/api/totp");}catch(e){TOTP=null;}return TOTP;}
+function totpOf(id){return((TOTP||{}).members||[]).find(x=>x.id===id)||{};}
+async function totpPanel(mid){
+  const m=CREW.find(x=>x.id===mid)||{};await loadTotp();const t=totpOf(mid);
+  const g=(TOTP||{}).enabled;
+  const state=t.bound_at?`<span class="badge appr">✅ 已绑定</span> <span class="hint">${esc(t.bound_at)}</span>`
+    :(t.has_secret?`<span class="badge pend">⏳ 已发密钥，等一次验码</span>`:`<span class="badge">未绑定</span>`);
+  $("#crewDetail").innerHTML=`<div class="detail-head"><h2>🔐 ${esc(m.name||"")} 的二次验证</h2></div>
+    <div class="kv"><span>状态 <b>${state}</b></span><span>闸门 <b>${g?"已生效":"未生效"}</b></span></div>
+    <div class="plan-box">绑定后，这些操作要多敲一次 6 位码：<br>
+      ${((TOTP||{}).guarded||[]).map(x=>"· "+esc(x)).join("<br>")}<br>
+      <span class="hint">它们的共同点是<b>按下去就直接对公网生效</b>，撤不回来。</span></div>
+    <div class="actions">
+      <button class="primary" id="tbNew">${t.has_secret?"🔁 换绑（生成新密钥）":"➕ 开始绑定"}</button>
+      ${t.has_contact&&m.status==="approved"?`<button id="tbMail">📧 换绑并邮寄给本人</button>`:""}
+      ${t.has_secret?`<button class="danger" id="tbOff">解绑</button>`:""}
+      <button onclick="showMember(${mid})">返回</button></div>
+    <div id="tbBox"></div>
+    <div class="masknote">⚠️ 万一手机丢了/全员进不来：命令行跑 <code>python guard.py --unbind-all</code>，
+      或在 <code>.env</code> 里设 <code>TOTP_GATE=0</code>。闸门有后门是**故意的**——把自己锁在门外没有别的救法。</div>`;
+  $("#tbNew").onclick=async()=>{
+    try{const r=await gapi(`/api/totp/${mid}/setup`,{method:"POST"},`换绑 ${m.name||""} 的 TOTP`);
+      showBind(mid,r);}catch(e){toast("失败："+e.message,false);}};
+  const bm=$("#tbMail");if(bm)bm.onclick=async()=>{
+    if(!confirm("将生成新密钥并邮寄到该成员登记邮箱，旧的立即失效。继续？"))return;
+    try{const r=await gapi(`/api/totp/${mid}/mail`,{method:"POST"},`邮寄 ${m.name||""} 的 TOTP 绑定`);
+      toast(r.ok?`已寄到 ${r.to}`:"发信失败："+r.info,!!r.ok);totpPanel(mid);}
+    catch(e){toast("失败："+e.message,false);}};
+  const bo=$("#tbOff");if(bo)bo.onclick=async()=>{
+    if(!confirm("解绑后此人不再是闸门钥匙持有者。继续？"))return;
+    try{await gapi(`/api/totp/${mid}`,{method:"DELETE"},`解绑 ${m.name||""} 的 TOTP`);
+      toast("已解绑");totpPanel(mid);}catch(e){toast("失败："+e.message,false);}};
+}
+function showBind(mid,r){
+  $("#tbBox").innerHTML=`<fieldset><legend>用验证器 App 扫码</legend>
+    <div style="text-align:center"><img src="${r.qr}" alt="TOTP 二维码"
+      style="width:210px;height:210px;border-radius:10px;background:#fff"/></div>
+    <div class="form-grid"><label>扫不了就手动输入密钥
+      <input value="${esc(r.secret)}" readonly onclick="this.select()" style="letter-spacing:1px"/></label>
+      <label>输入 App 里的 6 位码完成绑定
+        <input id="tbCode" inputmode="numeric" maxlength="6" placeholder="000000"
+          style="letter-spacing:6px;font-size:20px;text-align:center"/></label></div>
+    <div class="actions"><button class="primary" id="tbGo">确认绑定</button></div>
+    <div class="masknote">⚠️ <b>没验过码不算绑定</b>——否则扫错或手机时钟偏了，下次就没人能过闸门了。
+      这个密钥只显示这一次，页面一关就没了（它不落盘、也不会进公开快照）。</div></fieldset>`;
+  const inp=$("#tbCode");inp.focus();
+  inp.oninput=()=>{inp.value=inp.value.replace(/\D/g,"");if(inp.value.length===6)$("#tbGo").click();};
+  $("#tbGo").onclick=async()=>{
+    try{const c=await api(`/api/totp/${mid}/confirm`,{method:"POST",
+      headers:{"Content-Type":"application/json"},body:JSON.stringify({code:inp.value.trim()})});
+      toast(c.gate?"绑定成功，闸门已生效":"绑定成功");totpPanel(mid);}
+    catch(e){toast(e.message,false);}};
+}
 async function pollMail(){toast("收信中…");try{const r=await api("/api/mailbox/poll",{method:"POST"});
   toast(`新邮件 ${r.checked}｜识别 ${r.parsed}｜新建待审核 ${r.created}`);await loadCrew();}
   catch(e){toast("失败："+e.message,false);}}
@@ -876,8 +982,16 @@ function expenseForm(){
       toast("已记账");LEDGER=null;loadBill();}
     catch(e){toast("失败："+e.message,false);}};
 }
-function grantForm(){
+async function grantForm(){
   const ms=CREW.filter(m=>!m.masked);
+  // 现有授权列表：此前只能发、不能收——撤销只有 API 没有入口，等于承诺了做不到的事
+  let gs=[];try{gs=await api("/api/ledger/grants");}catch(e){}
+  const cur=gs.length?`<fieldset><legend>当前授权（${gs.length} 人）</legend>
+    ${gs.map(g=>{const m=CREW.find(x=>x.id===g.member_id)||{};
+      return `<div class="mrow" style="padding:5px 0"><span class="mname">${esc(m.name||"#"+g.member_id)}</span>
+        <span class="badge">${esc(g.role)}</span><span class="hint" style="flex:1">签发 ${esc((g.issued_at||"").slice(0,16))}</span>
+        <button class="danger" data-rv="${g.member_id}">撤销</button></div>`;}).join("")}
+    <div class="masknote">撤销＝把这个人的那份 wrapped_DEK 从线上信封里去掉，立即同步生效。</div></fieldset>`:"";
   $("#billMain").innerHTML=`<div class="detail-head"><h2>🔑 发放 / 重置账单口令</h2></div>
     <p style="color:var(--muted);font-size:13px">口令用于在**线上**解密账单。重置会让该成员的旧口令立即失效。
       <b>明文口令只显示这一次</b>，本地不保存——请立刻复制或用邮件发给他。</p>
@@ -890,10 +1004,19 @@ function grantForm(){
       <div id="gPass" style="font-family:ui-monospace,Consolas,monospace;font-size:18px;letter-spacing:1px;padding:8px 0"></div>
       <div class="actions"><button id="gCopy">📋 复制</button><button id="gMail">✉️ 邮件发送</button></div>
       <div class="masknote" id="gSync"></div>
-      <div class="masknote">⚠️ 重置会让该成员的<b>旧口令立即失效</b>；线上信封已同步，新口令即刻可用。</div></fieldset>`;
+      <div class="masknote">⚠️ 重置会让该成员的<b>旧口令立即失效</b>；线上信封已同步，新口令即刻可用。</div></fieldset>
+    ${cur}`;
+  $("#billMain").querySelectorAll("[data-rv]").forEach(b=>b.onclick=async()=>{
+    const id=+b.dataset.rv,nm=(CREW.find(x=>x.id===id)||{}).name||"#"+id;
+    if(!confirm(`撤销 ${nm} 的账单授权？他的口令将立即打不开线上账单。`))return;
+    try{const r=await gapi(`/api/ledger/grant/${id}`,{method:"DELETE"},`撤销 ${nm} 的账单授权`);
+      toast("已撤销｜线上同步："+(r.synced||"—"));grantForm();}
+    catch(e){toast("失败："+e.message,false);}});
   $("#gGo").onclick=async()=>{
-    try{const r=await api("/api/ledger/grant",{method:"POST",headers:{"Content-Type":"application/json"},
-      body:JSON.stringify({member_id:+$("#g_m").value,role:$("#g_r").value})});
+    const who=(CREW.find(x=>x.id===+$("#g_m").value)||{}).name||"";
+    try{const r=await gapi("/api/ledger/grant",{method:"POST",headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({member_id:+$("#g_m").value,role:$("#g_r").value})},
+      `发放/重置 ${who} 的账单口令（旧口令即刻作废）`);
       $("#gOut").style.display="";$("#gPass").textContent=r.passphrase;
       $("#gCopy").onclick=()=>navigator.clipboard.writeText(r.passphrase).then(()=>toast("已复制"));
       $("#gMail").onclick=()=>{const m=CREW.find(x=>x.id===r.member_id)||{};
