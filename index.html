@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="zh-CN">
 <head>
-<script>window.PREVIEW=true</script>
+<script>window.PREVIEW=true;window.BUILD="20260810104755"</script>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
 <title>2026·10 澳洲行 · 行程与价格监测</title>
@@ -468,6 +468,24 @@ function snapGet(u){                             // 把 GET /api/* 映射到 sna
 /* 线上快照必须绕开缓存：GitHub Pages 对静态文件发 Cache-Control: max-age=600，
    直接 fetch("snapshot.json") 会拿到最多 10 分钟前的旧数据——而抓价每轮都会推新快照，
    "飞书推的价＝网页看的价"就此失守（实测线上少 3 条监测项、缺整块新字段）。 */
+/* 版本自检：页面里的 BUILD 与快照里的 meta.build 不一致 = 这份 HTML 是缓存的旧版。
+   snapshot.json 用 no-store 取，一定是新的，所以这个比对可靠。 */
+function checkStale(){
+  const mine=window.BUILD, live=((SNAP||{}).meta||{}).build;
+  if(!mine||!live||mine===live)return;
+  const bar=document.createElement("div");
+  bar.style.cssText="position:fixed;left:0;right:0;bottom:0;z-index:200;background:var(--warn);"
+    +"color:#221a05;padding:10px 14px;font-size:13.5px;display:flex;align-items:center;gap:12px;"
+    +"box-shadow:0 -2px 12px rgba(0,0,0,.4)";
+  bar.innerHTML=`<span style="flex:1">📦 页面是缓存里的旧版本（${mine} → 最新 ${live}），部分改动看不到。</span>
+    <button id="swReload" style="background:#221a05;color:#ffd08a;border:0">立即更新</button>`;
+  document.body.appendChild(bar);
+  document.getElementById("swReload").onclick=async()=>{
+    try{const rs=await navigator.serviceWorker.getRegistrations();for(const r of rs)await r.unregister();}catch(e){}
+    try{for(const k of await caches.keys())await caches.delete(k);}catch(e){}
+    location.replace(location.pathname+"?b="+live);   // 换 URL 绕开 HTTP 缓存
+  };
+}
 async function loadSnapshot(){try{
   SNAP=await(await fetch("snapshot.json?t="+Date.now(),{cache:"no-store"})).json();
 }catch(e){
@@ -1376,7 +1394,7 @@ async function saveForm(){const name=$("#f_name").value.trim();if(!name){toast("
 async function delWatch(id){if(!confirm("确认删除该监测项及其历史？"))return;await api(`/api/watches/${id}`,{method:"DELETE"});
   selectedId=null;closeDetail();$("#detail").innerHTML=`<div class="empty">已删除</div>`;toast("已删除");await refresh();}
 
-(async()=>{ if(PREVIEW)await loadSnapshot(); switchTab("today"); skeleton(); await refresh();
+(async()=>{ if(PREVIEW){await loadSnapshot();checkStale();} switchTab("today"); skeleton(); await refresh();
   const w=+new URLSearchParams(location.search).get("w");   // 深链 ?w=<id> 直达某监测项（移动端亦可分享）
   if(w&&watches.some(x=>x.id===w))selectWatch(w);
 })();
