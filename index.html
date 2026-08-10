@@ -38,19 +38,19 @@
   .summary .total{font-size:22px;font-weight:700;color:var(--accent)}
   .summary .legs{color:var(--muted);font-size:12px;margin-top:4px}
   .plans{margin-top:10px;border-top:1px dashed var(--line);padding-top:8px;display:flex;flex-direction:column;gap:5px}
-  .plan{display:flex;align-items:center;gap:8px;font-size:12px;padding:4px 8px;border-radius:7px;background:var(--panel2);border:1px solid transparent}
-  .plan.best{border-color:var(--good)}
-  .plan .city{font-weight:600;color:var(--fg);min-width:56px}
-  .plan.best .city{color:var(--good)}
-  .plan .ptotal{font-weight:700;font-variant-numeric:tabular-nums}
-  .plan .pleg{color:var(--muted);margin-left:auto}
+  .plans .plan{display:flex;align-items:center;gap:8px;font-size:12px;padding:4px 8px;border-radius:7px;background:var(--panel2);border:1px solid transparent}
+  .plans .plan.best{border-color:var(--good)}
+  .plans .plan .city{font-weight:600;color:var(--fg);min-width:56px}
+  .plans .plan.best .city{color:var(--good)}
+  .plans .plan .ptotal{font-weight:700;font-variant-numeric:tabular-nums}
+  .plans .plan .pleg{color:var(--muted);margin-left:auto}
   /* 出发日版本分组 */
   .bestbar{margin:8px 0 4px;padding:6px 10px;border-radius:8px;background:rgba(46,204,113,.12);border:1px solid var(--good);color:var(--good);font-size:12.5px;font-weight:600;display:flex;align-items:center;gap:6px;flex-wrap:wrap}
   .bestbar .ptotal{margin-left:auto;font-size:15px}
   .depgroup{margin-top:8px;border-top:1px dashed var(--line);padding-top:7px}
   .dephead{color:#cdd6ea;font-size:12px;font-weight:600;margin:2px 4px 5px;display:flex;justify-content:space-between;gap:6px;flex-wrap:wrap}
   .dephead .dh-best{color:var(--muted);font-weight:500}
-  .plan.dim{opacity:.55}
+  .plans .plan.dim{opacity:.55}
   .badge.planA{color:#7db3ff;border-color:#2f4d80}.badge.planB{color:#8fe1b0;border-color:#2c5a42}
   .badge.planshared{color:#b7c0d0;border-color:#39414f}.badge.planref{color:#ffd86b;border-color:#7a6320}
   .dep-est{font-size:11px;color:var(--muted);margin:2px 4px 0;display:flex;gap:12px;flex-wrap:wrap}
@@ -201,7 +201,7 @@
     .card .row1{min-width:0}
     .card .name{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
     .card .price{flex:none}
-    .plan{flex-wrap:wrap}.plan .pleg{margin-left:0;width:100%;padding-left:34px}   /* 腿信息整行换行、不撑宽 */
+    .plans .plan{flex-wrap:wrap}.plans .plan .pleg{margin-left:0;width:100%;padding-left:34px}   /* 腿信息整行换行、不撑宽 */
     /* 大数字紧跟标签、不推到最右，杜绝被右缘裁切 */
     .bestbar .ptotal,.spread .sd,.dephead .dh-best{margin-left:8px}
     .dephead{justify-content:flex-start}
@@ -269,8 +269,8 @@
   .risk.low{color:var(--muted)}.risk.none{display:none}
   .todaybar{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:10px}
   .todaybar input[type=date]{width:auto;color-scheme:dark}
-  .cd{background:linear-gradient(135deg,#1b2330,#171a21);border:1px solid var(--line);border-radius:12px;padding:10px 13px;margin-bottom:10px}
-  .cd .cdn{font-size:20px;font-weight:700;color:var(--accent)}
+  .cdown{background:linear-gradient(135deg,#1b2330,#171a21);border:1px solid var(--line);border-radius:12px;padding:10px 13px;margin-bottom:10px}
+  .cdown .cdown-n{font-size:20px;font-weight:700;color:var(--accent)}
   .wxbox{background:var(--panel2);border:1px solid var(--line);border-radius:10px;padding:9px 12px;margin:10px 0;font-size:13px}
   .wxbox .wxtag{font-size:11px;color:var(--muted);margin-left:6px}
   .plan-box{border:1px solid var(--warn);background:rgba(255,176,32,.08);border-radius:10px;padding:10px 12px;margin:10px 0;font-size:13px;line-height:1.65}
@@ -564,8 +564,8 @@ async function loadToday(d){
 }
 function renderDay(t){
   const d=t.day||{},items=d.items||[];
-  const cd=t.days_until_trip>0?`<div class="cd"><div style="color:var(--muted);font-size:12px">距出发还有</div>
-      <div class="cdn">${t.days_until_trip} 天</div></div>`:"";
+  const cd=t.days_until_trip>0?`<div class="cdown"><div style="color:var(--muted);font-size:12px">距出发还有</div>
+      <div class="cdown-n">${t.days_until_trip} 天</div></div>`:"";
   const oor=t.out_of_range?`<div class="masknote">（今天不在行程区间内，已跳到最近的一天）</div>`:"";
   const wx=t.weather_note?`<div class="wxbox">🌤️ ${esc(t.weather_note)}
       ${(t.weather&&t.weather.kind==="climate")?`<span class="wxtag">还没进入预报窗口，这是历史同期均值、不是预报</span>`:""}</div>`:"";
@@ -801,8 +801,8 @@ function renderBill(L,grant){
     <span class="price">¥${s.amount_cny.toFixed(2)}</span></div>`).join("")||`<div class="hint">已结清</div>`;
   $("#billMain").innerHTML=`<button id="detailBack" onclick="$('#billMain').classList.remove('open')">← 返回</button>
     <div class="detail-head"><h2>💰 账单</h2>${grant?`<span class="badge appr">${esc(grant.hint)}·${esc(grant.role)}</span>`:''}</div>
-    <div class="cd"><div style="color:var(--muted);font-size:12px">总支出（按记账当日汇率折 CNY）</div>
-      <div class="cdn">¥${(b.total_cny||0).toFixed(2)}</div></div>
+    <div class="cdown"><div style="color:var(--muted);font-size:12px">总支出（按记账当日汇率折 CNY）</div>
+      <div class="cdown-n">¥${(b.total_cny||0).toFixed(2)}</div></div>
     <fieldset><legend>净额</legend>${netRows||'<div class="hint">暂无</div>'}</fieldset>
     <fieldset><legend>结算方案（最少转账次数）</legend>${set}</fieldset>
     <fieldset><legend>明细 ${(L.expenses||[]).length} 笔</legend>
@@ -1039,12 +1039,13 @@ async function drawFlightChart(id){
 }
 
 /* ---- 监测 ---- */
-let spreadChart=null;
+let spreadChart=null,DECIDED=null;
 async function refresh(){
   const[w,s,runs,sp,cal,fxs,dec]=await Promise.all([        // 并行取数，首屏更快
     api("/api/watches"),api("/api/summary"),api("/api/runs"),api("/api/spread"),
     api("/api/calendar").catch(()=>null),api("/api/fx").catch(()=>null),
     api("/api/decision").catch(()=>null)]);
+  DECIDED=(dec&&dec.decided)||null;
   watches=w;renderList();renderSummary(s);renderRuns(runs);renderSpread(sp);renderCalendar(cal,fxs);renderDecision(dec);
 }
 const DEC_ACT={ready:["🟢 可考虑出票","ready"],watch:["⚪ 观望","watch"],wait:["🔴 建议再等","wait"]};
@@ -1068,6 +1069,7 @@ function renderDecision(d){
 }
 function renderCalendar(cal,fxs){
   const el=$("#calCard");if(!el)return;
+  if(DECIDED){el.style.display="none";return;}   // 出发日已定且出票，邻近日比价无意义
   const routes=(cal&&cal.routes||[]).filter(r=>(r.days||[]).some(d=>d.price!=null));
   const fxline=(fxs&&fxs.rate)?`<div class="fxline">💱 1 AUD = ¥${fxs.rate.toFixed(3)}`
     +(fxs.chg7!=null?` · 7日 ${fxs.chg7>=0?'+':''}${fxs.chg7.toFixed(1)}%`:``)
@@ -1125,6 +1127,11 @@ function renderSummary(s){
   const el=$("#summary");
   const deps=s.departures||[];
   const hasAny=deps.some(d=>(d.cities||[]).some(c=>c.total!=null));
+  if(DECIDED){    // 已定案且出票：整程比价问的是"选哪个方案"，这个问题已经不存在了
+    el.innerHTML=`<div class="t">🎫 行程已定案 · 机票已出票</div>
+      <div class="legs">整程比价（A/B 方案、出发城市择优）已停用。<br>
+      现在看的是<b>改签净收益</b>——见「👥 同行」页各成员航段，或每日晨报的「💸 改签/改订建议」。</div>`;
+    return;}
   if(!hasAny){el.innerHTML=`<div class="t">整程合计 · 按出发日版本比价（去程+回程）</div><div class="legs">暂无足够数据，先抓一轮价（方案A去程尚未抓价时其整程为空属正常）</div>`;return;}
   const best=s.best;   // {plan,city,total}
   const bestBanner=best?`<div class="bestbar">🏆 整体最优 <b>方案${best.plan}</b> · ${best.city}<span class="ptotal">${fmt(best.total)}</span></div>`:"";
