@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="zh-CN">
 <head>
-<script>window.PREVIEW=true;window.BUILD="20260810112825"</script>
+<script>window.PREVIEW=true;window.BUILD="20260810115030"</script>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
 <title>2026·10 澳洲行 · 行程与价格监测</title>
@@ -888,7 +888,9 @@ function grantForm(){
     <div class="actions"><button class="primary" id="gGo">生成口令</button><button onclick="loadBill()">返回</button></div>
     <fieldset id="gOut" style="display:none"><legend>口令（只显示这一次）</legend>
       <div id="gPass" style="font-family:ui-monospace,Consolas,monospace;font-size:18px;letter-spacing:1px;padding:8px 0"></div>
-      <div class="actions"><button id="gCopy">📋 复制</button><button id="gMail">✉️ 邮件发送</button></div></fieldset>`;
+      <div class="actions"><button id="gCopy">📋 复制</button><button id="gMail">✉️ 邮件发送</button></div>
+      <div class="masknote" id="gSync"></div>
+      <div class="masknote">⚠️ 重置会让该成员的<b>旧口令立即失效</b>；线上信封已同步，新口令即刻可用。</div></fieldset>`;
   $("#gGo").onclick=async()=>{
     try{const r=await api("/api/ledger/grant",{method:"POST",headers:{"Content-Type":"application/json"},
       body:JSON.stringify({member_id:+$("#g_m").value,role:$("#g_r").value})});
@@ -897,7 +899,8 @@ function grantForm(){
       $("#gMail").onclick=()=>{const m=CREW.find(x=>x.id===r.member_id)||{};
         location.href=`mailto:${m.contact||""}?subject=${encodeURIComponent("澳洲行 账单口令")}&body=${encodeURIComponent(
           `你的账单口令：${r.passphrase}\n\n在 https://trip.surl.cf 的「💰 账单」页输入即可查看。\n口令只发这一次，请妥善保存；丢失可让发起人重置。`)}`;};
-      toast("已生成，记得立刻发出");}
+      const sy=$("#gSync");if(sy)sy.textContent="线上同步："+(r.synced||"—");
+      toast("已生成并同步线上");}
     catch(e){toast("失败："+e.message,false);}};
 }
 
