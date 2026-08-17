@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="zh-CN">
 <head>
-<script>window.PREVIEW=true;window.BUILD="20260817112803"</script>
+<script>window.PREVIEW=true;window.BUILD="20260817232813"</script>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
 <title>2026·10 澳洲行 · 行程与价格监测</title>
@@ -583,6 +583,9 @@ function switchTab(name){
   if(name==="map"&&!mapLoaded){watchImg($("#routemap"));$("#routemap").src=asset("routemap.svg","/api/routemap?t="+Date.now());mapLoaded=true;}
 }
 document.querySelectorAll(".tab").forEach(t=>t.onclick=()=>switchTab(t.dataset.tab));
+/* 线上不做账单（用户 2026-08-15 定）：整个页签摘掉，而不是留个空壳让人点进去看"尚未发布"。
+   快照里也不再带密文（见 publish.PUBLISH_LEDGER），所以这里没有可显示的东西。 */
+if(PREVIEW){const b=document.querySelector('.tab[data-tab="bill"]');if(b)b.remove();}
 
 /* ---- 今日：左侧日历/日列表，右侧当日详情 ---- */
 const RISK_TXT={high:"🔴 强依赖天气",med:"🟡 部分靠天",low:"⚪ 天气影响小",none:""};
@@ -659,19 +662,22 @@ let CREW=[],curMember=null;
 async function loadCrew(){
   try{CREW=await api("/api/members");}catch(e){$("#crewList").innerHTML="加载失败："+e.message;return;}
   if(!PREVIEW&&!TOTP)await loadTotp();     // 只为在名字旁标出"谁是闸门钥匙"
-  const add=PREVIEW?`<div class="masknote">线上为只读：如需加入，用「自助注册」把报文寄到 autrip@agent.qq.com，
-    审核通过后这里会显示完整信息。</div>`:`<div class="actions"><button class="primary" id="mAdd">＋ 新增成员</button>
-    <button id="mPoll">📮 收注册邮件</button></div>`;
+  // 线上同行改为**纯只读**（用户 2026-08-15 定）：连自助注册表单也不放——填表是写操作，
+  // 而线上是静态站、没有后端接收，表单只能生成一段要人自己去邮寄的报文，体验绕且容易以为已提交。
+  // 想加入的人直接发邮件说明即可，本机审核后随下次发布上线。
+  const add=PREVIEW?`<div class="masknote">📖 线上为只读视图。如需加入或修改信息，
+    发邮件到 autrip@agent.qq.com 说明，由行程发起人在本机录入并审核；审核通过后这里会显示完整信息。</div>`
+    :`<div class="actions"><button class="primary" id="mAdd">＋ 新增成员</button>
+    <button id="mPoll">📮 收注册邮件</button>
+    <button id="mReg">📝 自助注册报文</button></div>`;
   $("#crewList").innerHTML=CREW.map(m=>{const[cls,txt]=MSTATUS[m.status]||MSTATUS.pending;
     return `<div class="dcard mcard ${m.id===curMember?'active':''}" data-m="${m.id}"><div class="mrow">
       <span class="mname">${esc(m.name)}</span><span class="badge ${cls}">${txt}</span></div>
       <div class="dsub">${[m.home_city,m.gender,m.mbti].filter(Boolean).map(esc).join(" · ")||"—"}
-        · ${(m.flights||[]).length||m.n_flights||0} 段</div></div>`;}).join("")+add
-    +`<div class="actions"><button id="mReg">📝 自助注册</button></div>`;
+        · ${(m.flights||[]).length||m.n_flights||0} 段</div></div>`;}).join("")+add;
   $("#crewList").querySelectorAll(".dcard").forEach(c=>c.onclick=()=>showMember(+c.dataset.m));
-  if(!PREVIEW){const a=$("#mAdd");if(a)a.onclick=()=>editMember(null);
-    const p=$("#mPoll");if(p)p.onclick=pollMail;}
-  $("#mReg").onclick=showRegForm;
+  if(!PREVIEW){$("#mAdd").onclick=()=>editMember(null);
+    $("#mPoll").onclick=pollMail;$("#mReg").onclick=showRegForm;}
   if(curMember)showMember(curMember);
 }
 function showMember(id){
@@ -822,13 +828,15 @@ async function pollMail(){toast("收信中…");try{const r=await api("/api/mail
   toast(`新邮件 ${r.checked}｜识别 ${r.parsed}｜新建待审核 ${r.created}`);await loadCrew();}
   catch(e){toast("失败："+e.message,false);}}
 function editMember(){showRegForm(true);}
-/* 自助注册表单：线上没有后端，填完生成报文 → 邮寄/粘贴转一手 */
+/* 注册报文表单：**本机专用**（线上同行已收窄为只读，见 loadCrew）。
+   仍保留"生成报文"是因为本机也能替人代录：口头/微信收到信息 → 填表 → 直接入库待审核。 */
 function showRegForm(local){
   const mail="autrip@agent.qq.com";
-  $("#crewDetail").innerHTML=`<div class="detail-head"><h2>📝 ${local?"新增成员":"自助注册"}</h2></div>
-    <p style="color:var(--muted);font-size:13px">填完生成一段注册报文。${local?"":`线上是只读静态站，
-      请把报文<b>邮寄到 ${mail}</b>（或直接发给行程发起人），本地收到后进入<b>待审核</b>，
-      通过后你的信息才会在这里完整显示。`}</p>
+  if(PREVIEW){$("#crewDetail").innerHTML=`<div class="empty">📖 线上为只读视图<br>
+    <span class="hint">如需加入或修改信息，发邮件到 ${mail} 说明即可。</span></div>`;return;}
+  $("#crewDetail").innerHTML=`<div class="detail-head"><h2>📝 ${local?"新增成员":"注册报文"}</h2></div>
+    <p style="color:var(--muted);font-size:13px">填完可直接入库为<b>待审核</b>，
+      或生成一段报文转给别人/存档。审核通过后才会在线上显示完整信息。</p>
     <div class="form-grid">
       <label>姓名 *<input id="r_name" placeholder="如 Duke"/></label>
       <label>性别${sel("r_gender",["","男","女","其他"],"")}</label>
@@ -837,8 +845,8 @@ function showRegForm(local){
       <label>联系方式（仅本地可见，不公开）<input id="r_contact" placeholder="邮箱或手机"/></label>
       <label>备注<input id="r_note" placeholder="如 中国出入境段待定"/></label>
     </div>
-    <div class="actions"><button class="primary" id="rGen">生成报文</button>
-      ${local?`<button id="rSave">直接入库(待审核)</button>`:""}</div>
+    <div class="actions"><button class="primary" id="rSave">直接入库(待审核)</button>
+      <button id="rGen">生成报文</button></div>
     <fieldset id="rOut" style="display:none"><legend>注册报文</legend>
       <textarea id="rText" rows="10" style="width:100%;font-family:ui-monospace,Consolas,monospace;font-size:12px"></textarea>
       <div class="actions"><button id="rCopy">📋 复制</button><button id="rMail">✉️ 用邮件发送</button></div></fieldset>`;
@@ -850,7 +858,7 @@ function showRegForm(local){
     $("#rOut").style.display="";$("#rText").value=payload();};
   $("#rCopy").onclick=()=>{navigator.clipboard.writeText($("#rText").value).then(()=>toast("已复制"),()=>toast("复制失败",false));};
   $("#rMail").onclick=()=>{location.href=`mailto:${mail}?subject=${encodeURIComponent("澳洲行 自助注册")}&body=${encodeURIComponent($("#rText").value)}`;};
-  const s=$("#rSave");if(s)s.onclick=async()=>{
+  $("#rSave").onclick=async()=>{
     try{const r=await api("/api/members/register",{method:"POST",headers:{"Content-Type":"application/json"},
       body:JSON.stringify({payload:payload()})});toast(r.created?`已建待审核：${r.name}`:`已存在同名：${r.name}`);
       await loadCrew();}catch(e){toast("失败："+e.message,false);}};
@@ -894,9 +902,11 @@ async function loadBill(){
     $("#bGrant").onclick=grantForm;
     return;
   }
+  // 线上不做账单：页签已摘除，正常点不到这里；直连深链才会落进来，给一句明确说明。
   const env=(SNAP||{}).ledger_sealed;
   if(!env){$("#billSide").innerHTML="";
-    $("#billMain").innerHTML=`<div class="empty">尚未发布账单（还没有人被授权）</div>`;return;}
+    $("#billMain").innerHTML=`<div class="empty">💰 账单只在本机使用<br>
+      <span class="hint">线上版本不做在线记账，账单数据不会发布到公开站。</span></div>`;return;}
   if(LEDGER){renderBill(LEDGER.ledger,LEDGER.grant);return;}
   $("#billSide").innerHTML=`<div class="dcard"><div class="mrow"><span class="mname">🔒 账单已加密</span></div>
       <div class="dsub">共 ${(env.grants||[]).length} 份授权</div></div>
