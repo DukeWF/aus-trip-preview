@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="zh-CN">
 <head>
-<script>window.PREVIEW=true;window.BUILD="20260819141542"</script>
+<script>window.PREVIEW=true;window.BUILD="20260820002105"</script>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
 <title>2026·10 澳洲行 · 行程与价格监测</title>
@@ -69,6 +69,16 @@
   details.runs{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:6px 12px;margin-bottom:10px;font-size:12px}
   details.runs summary{cursor:pointer;color:var(--muted)}
   .runrow{display:flex;justify-content:space-between;padding:3px 0;border-bottom:1px dashed var(--line);color:var(--muted)}
+  /* 联程组：把"自行中转的两段"当一趟行程看 */
+  .combo{background:var(--panel2);border:1px solid var(--line);border-radius:10px;padding:10px 12px;margin:0 0 8px}
+  .combo.win{border-color:var(--good)}
+  .combo.bad{border-color:var(--warn)}
+  .combo .croute{font-weight:600;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+  .combo .ctot{margin-left:auto;font-variant-numeric:tabular-nums;font-weight:700}
+  .combo .clegs{color:var(--muted);font-size:12px;margin:5px 0 0;line-height:1.7}
+  .combo .cverdict{font-size:12.5px;margin-top:6px}
+  .combo .cconn{font-size:11.5px;color:var(--muted)}
+  .combo .cconn.bad{color:var(--warn)}
   .group-title{color:var(--muted);font-size:12px;margin:14px 6px 6px;text-transform:uppercase;letter-spacing:.5px}
   .card{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:11px 12px;margin-bottom:9px;cursor:pointer;transition:.15s}
   .card:hover{border-color:var(--accent)}
@@ -449,6 +459,7 @@ function snapGet(u){                             // 把 GET /api/* 映射到 sna
   if((m=u.match(/^\/api\/watches\/(\d+)\/alerts$/)))return (s.alerts||{})[m[1]]||[];
   if((m=u.match(/^\/api\/watches\/(\d+)\/xquotes$/)))return (s.xquotes||{})[m[1]]||[];
   if(u==="/api/baggage")return s.baggage||{enabled:false,carriers:[]};
+  if(u==="/api/combos")return s.combos||[];
   if(u.startsWith("/api/watches"))return s.watches||[];
   if(u.startsWith("/api/summary-card"))return {};   // 图片走 img.src，不经 api()
   if(u.startsWith("/api/spread"))return s.spread||{series:[],current:{}};
@@ -1202,11 +1213,12 @@ async function drawFlightChart(id){
 /* ---- 监测 ---- */
 let spreadChart=null,DECIDED=null;
 async function refresh(){
-  const[w,s,runs,sp,cal,fxs,dec]=await Promise.all([        // 并行取数，首屏更快
+  const[w,s,runs,sp,cal,fxs,dec,cb]=await Promise.all([      // 并行取数，首屏更快
     api("/api/watches"),api("/api/summary"),api("/api/runs"),api("/api/spread"),
     api("/api/calendar").catch(()=>null),api("/api/fx").catch(()=>null),
-    api("/api/decision").catch(()=>null)]);
+    api("/api/decision").catch(()=>null),api("/api/combos").catch(()=>[])]);
   DECIDED=(dec&&dec.decided)||null;
+  COMBOS=Array.isArray(cb)?cb:[];
   watches=w;renderList();renderSummary(s);renderRuns(runs);renderSpread(sp);renderCalendar(cal,fxs);renderDecision(dec);
 }
 const DEC_ACT={ready:["🟢 可考虑出票","ready"],watch:["⚪ 观望","watch"],wait:["🔴 建议再等","wait"]};
@@ -1328,6 +1340,28 @@ function metaLine(w){
   return `${w.destination||''}${w.poi?'·'+w.poi:''} · ${w.date_start||''}~${w.date_end||''}`
     +(w.hotel_name?` · 🎯${w.hotel_name}`:'');
 }
+/* 分组按**现在的用途**，不再按早已作废的 A/B 方案。
+   定案出票后，"方案A/方案B/两方案共用"这三个标签已经没有指代对象，
+   而 35 条里有 14 条是停用的历史项——全摊在一起看不出谁还在起作用。 */
+const ROLE_BUCKETS=[
+  ["booked",  "🎫 已出票（看改签净收益）"],
+  ["pending", "🔎 待定 · Katherine（仍在找票）"],
+  ["alt",     "🔀 改订/直飞对照"],
+  ["hotel",   "🏨 住宿"],
+  ["target",  "🎯 目标酒店"],
+  ["other",   "✈️ 其它机票"],
+  ["off",     "⛔ 已停用（历史留存）"],
+];
+function roleKey(w){
+  if(!w.active)return "off";
+  const n=w.name||"";
+  if(n.includes("🎫已出票"))return "booked";
+  if(n.includes("🔎待定"))return "pending";
+  if(n.includes("🔀改订")||n.includes("✈️直飞")||n.includes("内陆"))return "alt";
+  if(w.type==="hotel"&&w.hotel_name)return "target";
+  if(w.type==="hotel"||w.type==="airbnb")return "hotel";
+  return "other";
+}
 const PLAN_BUCKETS=[["A","🅰️ 方案A · 10.1 出发"],["B","🅱️ 方案B · 10.2 出发"],["","🔗 两方案共用"],["ref","☆ 参考"]];
 const TYPE_ORDER={flight:0,hotel:1,airbnb:2};
 const BUY_SHORT={good:"🟢好价",low:"🟡偏低",high:"🔴偏高",watch:"⚪观望"};
@@ -1353,10 +1387,32 @@ function cardHtml(w){
     ${buyBadge(w)}${susMark}<span class="price ${lp==null?'none':(hit?'good':'')}">${fmt(lp)}</span></div>
     <div class="meta">${metaLine(w)}${w.target_price?` · 目标 ¥${Math.round(w.target_price)}`:''}</div></div>`;
 }
+let COMBOS=[];
+/* 联程组：监测项是按单段建的，但真实买法常是分段拼出来的（去程就是 上海→西安 + 西安→悉尼
+   两张票）。"合计 vs 单票"这个唯一有决策意义的数字，此前页面上根本不存在。
+   纯计算、不额外抓价——FlyAI 只有 100 次/天，聚合分析不该再花额度。 */
+function comboHtml(c){
+  const win=(c.save||0)>0, bad=c.connect&&c.connect.ok===false;
+  const cls=bad?"bad":(win?"win":"");
+  const legs=(c.legs||[]).map(l=>`${esc(l.name.replace(/^[🎫🔎✈️🔀🛫🛬]+\s*/,""))} ${l.price!=null?"¥"+Math.round(l.price):"—"}${l.quote?` <span style="opacity:.7">${esc(l.quote)}</span>`:""}`).join(" ＋ ");
+  return `<div class="combo ${cls}">
+    <div class="croute"><span>🔗 ${esc(c.route)}</span>
+      <span class="badge">${esc(c.date||"")}</span>
+      ${bad?`<span class="badge pend">接续存疑</span>`:""}
+      <span class="ctot">${c.total!=null?"¥"+Math.round(c.total):"—"}</span></div>
+    <div class="clegs">${legs}</div>
+    <div class="cconn ${bad?"bad":""}">↔ ${esc((c.connect||{}).text||"")}</div>
+    <div class="cverdict">${esc(c.verdict||"")}</div></div>`;
+}
 function renderList(){
   $("#listTools").style.display=watches.length?"flex":"none";
   const f=listFilters();
   let html="";
+  // 注意筛选器的"全部"是空串而非 "all"（listFilters 直接取 select.value）
+  if(COMBOS.length&&!f.sort&&(!f.type||f.type==="flight")){
+    html+=`<div class="group-title">🔗 联程组（分段买 vs 单票 · ${COMBOS.length}）</div>`
+        + COMBOS.map(comboHtml).join("");
+  }
   if(f.sort){                          // 选了排序 → 扁平列表跨版本直接比
     let arr=watches.filter(w=>passFilter(w,f));
     const lp=w=>w.latest?w.latest.price:null;
@@ -1365,11 +1421,14 @@ function renderList(){
     else if(f.sort==="dev")arr.sort((a,b)=>devPct(a)-devPct(b));
     html=arr.map(cardHtml).join("");
     if(arr.length&&f.sort==="dev")html=`<div class="group-title">按「现价距历史低点 %」升序（越靠前越接近历史低）</div>`+html;
-  }else for(const[key,label] of PLAN_BUCKETS){
-    const arr=watches.filter(w=>planKey(w)===key&&passFilter(w,f))
+  }else for(const[key,label] of ROLE_BUCKETS){
+    const arr=watches.filter(w=>roleKey(w)===key&&passFilter(w,f))
                      .sort((a,b)=>(TYPE_ORDER[a.type]-TYPE_ORDER[b.type])||(a.id-b.id));
     if(!arr.length)continue;
-    html+=`<div class="group-title">${label}（${arr.length}）</div>`;
+    const hint=key==="booked"?" · 票已出，看的是扣手续费后的净收益"
+              :key==="pending"?" · 唯一还能改变决策的一组"
+              :key==="off"?" · 不再抓价，仅供回溯":"";
+    html+=`<div class="group-title">${label}（${arr.length}）${hint}</div>`;
     for(const w of arr)html+=cardHtml(w);
   }
   $("#list").innerHTML=html||`<div class="empty" style="margin-top:30px">没有匹配的监测项</div>`;
