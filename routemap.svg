@@ -41,7 +41,7 @@
 <rect x="551.8" y="391.0" width="44" height="17" rx="8" fill="#161b24" stroke="#ffd86b" opacity="0.9"/>
 <text x="573.8" y="403.0" fill="#ffd86b" font-size="10" text-anchor="middle">🛏 3 晚</text>
 <text x="30" y="440" fill="#e6e8ee" font-size="16" font-weight="700">② 每日路书 · 景点顺序</text>
-<text x="230" y="440" fill="#8b93a4" font-size="11">已定案 · 已出票 · 12 天 · 行程.md v3.2</text>
+<text x="230" y="440" fill="#8b93a4" font-size="11">已定案 · 已出票 · 12 天 · 行程.md v3.5</text>
 <rect x="30" y="464" width="840" height="26" rx="13" fill="#1a1030" stroke="#cf6fff" opacity="0.9"/>
 <text x="46" y="481" fill="#cf6fff" font-size="12" font-weight="700">✈ Day1 · 10.1（四）</text>
 <text x="195" y="481" fill="#d9c9f0" font-size="11.5">出发 · 上海→西安→悉尼：上海 MU2170  →  西安转机  →  悉尼(机上过夜)</text>
@@ -62,8 +62,8 @@
 <rect x="40" y="596" width="830" height="28" rx="8" fill="#161b24" opacity="0.85"/>
 <rect x="48" y="601" width="96" height="18" rx="7" fill="#4c8dff" opacity="0.9"/>
 <text x="54" y="614" fill="#0b0e13" font-size="11.5" font-weight="700">Day4 · 10.4</text>
-<text x="156" y="608" fill="#e6e8ee" font-size="12.5" font-weight="600">蓝山一日</text>
-<text x="156" y="622" fill="#c6ccd8" font-size="11.5">回声角三姐妹峰  →  Scenic World  →  Leura 小镇</text>
+<text x="156" y="608" fill="#e6e8ee" font-size="12.5" font-weight="600">自选日(可分头)</text>
+<text x="156" y="622" fill="#c6ccd8" font-size="11.5">A:海崖大桥+Kiama喷水洞  →  ／  →  B:Taronga动物园  →  鹦鹉岛/屈臣氏湾</text>
 <rect x="30" y="636" width="840" height="26" rx="13" fill="#1a1030" stroke="#cf6fff" opacity="0.9"/>
 <text x="46" y="653" fill="#cf6fff" font-size="12" font-weight="700">✈ Day5 · 10.5（一）</text>
 <text x="195" y="653" fill="#d9c9f0" font-size="11.5">悉尼→圣灵群岛：悉尼鱼市  →  ✈ SYD→PPP  →  Airlie 泻湖日落</text>
@@ -96,8 +96,8 @@
 <rect x="40" y="872" width="830" height="28" rx="8" fill="#161b24" opacity="0.85"/>
 <rect x="48" y="877" width="96" height="18" rx="7" fill="#ffb020" opacity="0.9"/>
 <text x="54" y="890" fill="#0b0e13" font-size="11.5" font-weight="700">Day10 · 10.10</text>
-<text x="156" y="884" fill="#e6e8ee" font-size="12.5" font-weight="600">城市半日 + 企鹅</text>
-<text x="156" y="898" fill="#c6ccd8" font-size="11.5">QVM(周六赶早)  →  州立图书馆  →  Degraves  →  NGV  →  15:30 出发  →  🐧 菲利普岛企鹅</text>
+<text x="156" y="884" fill="#e6e8ee" font-size="12.5" font-weight="600">早市 + 考拉 + 企鹅</text>
+<text x="156" y="898" fill="#c6ccd8" font-size="11.5">QVM(周六早市)  →  图书馆/NGV  →  13:45 跟团  →  🐨 考拉保护区  →  🐧 菲利普岛企鹅</text>
 <rect x="40" y="906" width="830" height="28" rx="8" fill="#161b24" opacity="0.85"/>
 <rect x="48" y="911" width="96" height="18" rx="7" fill="#ffb020" opacity="0.9"/>
 <text x="54" y="924" fill="#0b0e13" font-size="11.5" font-weight="700">Day11 · 10.11</text>
@@ -113,31 +113,31 @@
 <text x="46" y="1048" fill="#4c8dff" font-size="15" font-weight="700">悉尼</text>
 <text x="74" y="1048" fill="#8b93a4" font-size="11">· Day2–5 · 12 处</text>
 <rect x="48" y="1062" width="330" height="172" rx="8" fill="#0c1119" stroke="#1c2636" opacity="1.0"/>
-<path d="M328.1,1185.6 L329.2,1182.7 L330.5,1184.8 L325.3,1195.0 L328.1,1179.1 L327.5,1184.1 L346.1,1207.2 L343.6,1217.4 L82.9,1092.4 L79.9,1089.5 L88.1,1078.6 L323.4,1192.1" fill="none" stroke="#4c8dff" stroke-width="1" opacity="0.25"/>
-<circle cx="328.1" cy="1185.6" r="8.5" fill="#4c8dff" opacity="0.9"/>
-<text x="328.1" y="1189.0" fill="#0b0e13" font-size="10" font-weight="700" text-anchor="middle">1</text>
-<circle cx="329.2" cy="1182.7" r="8.5" fill="#4c8dff" opacity="0.9"/>
-<text x="329.2" y="1186.1000000000001" fill="#0b0e13" font-size="10" font-weight="700" text-anchor="middle">2</text>
-<circle cx="330.5" cy="1184.8" r="8.5" fill="#4c8dff" opacity="0.9"/>
-<text x="330.5" y="1188.2" fill="#0b0e13" font-size="10" font-weight="700" text-anchor="middle">3</text>
-<circle cx="325.3" cy="1195.0" r="8.5" fill="#4c8dff" opacity="0.9"/>
-<text x="325.3" y="1198.4" fill="#0b0e13" font-size="10" font-weight="700" text-anchor="middle">4</text>
-<circle cx="328.1" cy="1179.1" r="8.5" fill="#4c8dff" opacity="0.9"/>
-<text x="328.1" y="1182.5" fill="#0b0e13" font-size="10" font-weight="700" text-anchor="middle">5</text>
-<circle cx="327.5" cy="1184.1" r="8.5" fill="#4c8dff" opacity="0.9"/>
-<text x="327.5" y="1187.5" fill="#0b0e13" font-size="10" font-weight="700" text-anchor="middle">6</text>
-<circle cx="346.1" cy="1207.2" r="8.5" fill="#4c8dff" opacity="0.9"/>
-<text x="346.1" y="1210.6000000000001" fill="#0b0e13" font-size="10" font-weight="700" text-anchor="middle">7</text>
-<circle cx="343.6" cy="1217.4" r="8.5" fill="#4c8dff" opacity="0.9"/>
-<text x="343.6" y="1220.8000000000002" fill="#0b0e13" font-size="10" font-weight="700" text-anchor="middle">8</text>
-<circle cx="82.9" cy="1092.4" r="8.5" fill="#4c8dff" opacity="0.9"/>
-<text x="82.9" y="1095.8000000000002" fill="#0b0e13" font-size="10" font-weight="700" text-anchor="middle">9</text>
-<circle cx="79.9" cy="1089.5" r="8.5" fill="#4c8dff" opacity="0.9"/>
-<text x="79.9" y="1092.9" fill="#0b0e13" font-size="10" font-weight="700" text-anchor="middle">10</text>
-<circle cx="88.1" cy="1078.6" r="8.5" fill="#4c8dff" opacity="0.9"/>
-<text x="88.1" y="1082.0" fill="#0b0e13" font-size="10" font-weight="700" text-anchor="middle">11</text>
-<circle cx="323.4" cy="1192.1" r="8.5" fill="#4c8dff" opacity="0.9"/>
-<text x="323.4" y="1195.5" fill="#0b0e13" font-size="10" font-weight="700" text-anchor="middle">12</text>
+<path d="M304.4,1081.7 L307.0,1081.0 L310.1,1081.5 L298.1,1083.8 L304.4,1080.2 L303.2,1081.3 L346.1,1086.7 L340.4,1089.0 L323.4,1078.6 L279.8,1079.3 L79.9,1217.4 L293.7,1083.2" fill="none" stroke="#4c8dff" stroke-width="1" opacity="0.25"/>
+<circle cx="304.4" cy="1081.7" r="8.5" fill="#4c8dff" opacity="0.9"/>
+<text x="304.4" y="1085.1000000000001" fill="#0b0e13" font-size="10" font-weight="700" text-anchor="middle">1</text>
+<circle cx="307.0" cy="1081.0" r="8.5" fill="#4c8dff" opacity="0.9"/>
+<text x="307.0" y="1084.4" fill="#0b0e13" font-size="10" font-weight="700" text-anchor="middle">2</text>
+<circle cx="310.1" cy="1081.5" r="8.5" fill="#4c8dff" opacity="0.9"/>
+<text x="310.1" y="1084.9" fill="#0b0e13" font-size="10" font-weight="700" text-anchor="middle">3</text>
+<circle cx="298.1" cy="1083.8" r="8.5" fill="#4c8dff" opacity="0.9"/>
+<text x="298.1" y="1087.2" fill="#0b0e13" font-size="10" font-weight="700" text-anchor="middle">4</text>
+<circle cx="304.4" cy="1080.2" r="8.5" fill="#4c8dff" opacity="0.9"/>
+<text x="304.4" y="1083.6000000000001" fill="#0b0e13" font-size="10" font-weight="700" text-anchor="middle">5</text>
+<circle cx="303.2" cy="1081.3" r="8.5" fill="#4c8dff" opacity="0.9"/>
+<text x="303.2" y="1084.7" fill="#0b0e13" font-size="10" font-weight="700" text-anchor="middle">6</text>
+<circle cx="346.1" cy="1086.7" r="8.5" fill="#4c8dff" opacity="0.9"/>
+<text x="346.1" y="1090.1000000000001" fill="#0b0e13" font-size="10" font-weight="700" text-anchor="middle">7</text>
+<circle cx="340.4" cy="1089.0" r="8.5" fill="#4c8dff" opacity="0.9"/>
+<text x="340.4" y="1092.4" fill="#0b0e13" font-size="10" font-weight="700" text-anchor="middle">8</text>
+<circle cx="323.4" cy="1078.6" r="8.5" fill="#4c8dff" opacity="0.9"/>
+<text x="323.4" y="1082.0" fill="#0b0e13" font-size="10" font-weight="700" text-anchor="middle">9</text>
+<circle cx="279.8" cy="1079.3" r="8.5" fill="#4c8dff" opacity="0.9"/>
+<text x="279.8" y="1082.7" fill="#0b0e13" font-size="10" font-weight="700" text-anchor="middle">10</text>
+<circle cx="79.9" cy="1217.4" r="8.5" fill="#4c8dff" opacity="0.9"/>
+<text x="79.9" y="1220.8000000000002" fill="#0b0e13" font-size="10" font-weight="700" text-anchor="middle">11</text>
+<circle cx="293.7" cy="1083.2" r="8.5" fill="#4c8dff" opacity="0.9"/>
+<text x="293.7" y="1086.6000000000001" fill="#0b0e13" font-size="10" font-weight="700" text-anchor="middle">12</text>
 <circle cx="402.0" cy="1064" r="7" fill="#4c8dff"/>
 <text x="402.0" y="1067" fill="#0b0e13" font-size="9" font-weight="700" text-anchor="middle">1</text>
 <text x="414.0" y="1068" fill="#e6e8ee" font-size="11">环形码头</text>
@@ -172,16 +172,16 @@
 <text x="526.0" y="1187" fill="#8b93a4" font-size="9.5">D3</text>
 <circle cx="402.0" cy="1200" r="7" fill="#4c8dff"/>
 <text x="402.0" y="1203" fill="#0b0e13" font-size="9" font-weight="700" text-anchor="middle">9</text>
-<text x="414.0" y="1204" fill="#e6e8ee" font-size="11">三姐妹峰</text>
-<text x="466.0" y="1204" fill="#8b93a4" font-size="9.5">D4</text>
+<text x="414.0" y="1204" fill="#e6e8ee" font-size="11">Taronga动物园</text>
+<text x="538.0" y="1204" fill="#8b93a4" font-size="9.5">D4</text>
 <circle cx="633.0" cy="1064" r="7" fill="#4c8dff"/>
 <text x="633.0" y="1067" fill="#0b0e13" font-size="9" font-weight="700" text-anchor="middle">10</text>
-<text x="645.0" y="1068" fill="#e6e8ee" font-size="11">Scenic World</text>
-<text x="793.0" y="1068" fill="#8b93a4" font-size="9.5">D4</text>
+<text x="645.0" y="1068" fill="#e6e8ee" font-size="11">鹦鹉岛</text>
+<text x="685.0" y="1068" fill="#8b93a4" font-size="9.5">D4</text>
 <circle cx="633.0" cy="1081" r="7" fill="#4c8dff"/>
 <text x="633.0" y="1084" fill="#0b0e13" font-size="9" font-weight="700" text-anchor="middle">11</text>
-<text x="645.0" y="1085" fill="#e6e8ee" font-size="11">Leura 小镇</text>
-<text x="745.0" y="1085" fill="#8b93a4" font-size="9.5">D4</text>
+<text x="645.0" y="1085" fill="#e6e8ee" font-size="11">Kiama(方案A)</text>
+<text x="769.0" y="1085" fill="#8b93a4" font-size="9.5">D4</text>
 <circle cx="633.0" cy="1098" r="7" fill="#4c8dff"/>
 <text x="633.0" y="1101" fill="#0b0e13" font-size="9" font-weight="700" text-anchor="middle">12</text>
 <text x="645.0" y="1102" fill="#e6e8ee" font-size="11">悉尼鱼市</text>
