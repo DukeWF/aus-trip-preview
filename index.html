@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="zh-CN">
 <head>
-<script>window.PREVIEW=true;window.BUILD="20260823231435"</script>
+<script>window.PREVIEW=true;window.BUILD="20260824000352"</script>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
 <title>2026·10 澳洲行 · 行程与价格监测</title>
@@ -69,6 +69,19 @@
   details.runs{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:6px 12px;margin-bottom:10px;font-size:12px}
   details.runs summary{cursor:pointer;color:var(--muted)}
   .runrow{display:flex;justify-content:space-between;padding:3px 0;border-bottom:1px dashed var(--line);color:var(--muted)}
+  /* 买在澳洲 */
+  .shop-wrap{max-width:1000px}
+  .shop-hero{background:var(--panel2);border:1px solid var(--line);border-radius:12px;padding:14px 16px;margin:0 0 14px}
+  .shop-hero h2{margin:0 0 6px;font-size:17px}
+  .shop-sec{margin:0 0 18px}
+  .shop-sec>h3{font-size:15px;margin:0 0 8px;display:flex;align-items:center;gap:8px}
+  .shop-sec ul{margin:0;padding-left:20px;line-height:1.85}
+  .buytab{width:100%;border-collapse:collapse;font-size:13px}
+  .buytab th,.buytab td{border:1px solid var(--line);padding:7px 9px;text-align:left;vertical-align:top}
+  .buytab th{background:var(--panel2);font-weight:600;white-space:nowrap}
+  .buytab td:first-child{white-space:nowrap;font-weight:600}
+  .avoid li{color:var(--warn)}
+  .shop-src{font-size:12px;color:var(--muted);word-break:break-all;line-height:1.7}
   /* 联程组：把"自行中转的两段"当一趟行程看 */
   .combo{background:var(--panel2);border:1px solid var(--line);border-radius:10px;padding:10px 12px;margin:0 0 8px}
   .combo.win{border-color:var(--good)}
@@ -330,6 +343,7 @@
     <div class="tab" data-tab="bill">💰 账单</div>
     <div class="tab" data-tab="monitor">✈️ 价格监测</div>
     <div class="tab" data-tab="reflect">🔍 自省</div>
+    <div class="tab" data-tab="shop">🛍️ 买在澳洲</div>
     <div class="tab" data-tab="itin">📋 行程</div>
     <div class="tab" data-tab="glance">📸 速览</div>
     <div class="tab" data-tab="map">🗺️ 路线图</div>
@@ -387,6 +401,8 @@
 <div class="view" id="view-reflect"><div class="reflect" id="reflectBody">加载中…</div></div>
 
 <!-- ===== 行程 ===== -->
+<div class="view" id="view-shop"><div id="shopBody">加载中…</div></div>
+
 <div class="view" id="view-itin">
   <div class="ckwrap">
     <details class="ticketck" id="ticketCk"><summary>🎫 出票演练清单<span class="ck-prog" id="ckProg"></span></summary>
@@ -460,6 +476,7 @@ function snapGet(u){                             // 把 GET /api/* 映射到 sna
   if((m=u.match(/^\/api\/watches\/(\d+)\/xquotes$/)))return (s.xquotes||{})[m[1]]||[];
   if(u==="/api/baggage")return s.baggage||{enabled:false,carriers:[]};
   if(u==="/api/combos")return s.combos||[];
+  if(u==="/api/shopping")return s.shopping||{};
   if(u.startsWith("/api/watches"))return s.watches||[];
   if(u.startsWith("/api/summary-card"))return {};   // 图片走 img.src，不经 api()
   if(u.startsWith("/api/spread"))return s.spread||{series:[],current:{}};
@@ -579,16 +596,19 @@ function switchTab(name){
   const acts=PREVIEW?{}:{           // 预览模式：不渲染任何写操作按钮
     monitor:`<button id="fetchAll">⟳ 抓全部</button> <button class="primary" id="addBtn">+ 新增监测</button>`,
     reflect:`<button id="reflectRun" class="primary">🔍 立即自省</button> <button id="reflectRefresh">↻ 刷新</button>`,
+    shop:PREVIEW?``:`<button id="shopRefresh">🌐 联网刷新</button>`,
     itin:`<button onclick="window.open(asset('itinerary.pdf','/api/itinerary.pdf'),'_blank')">🖨️ 打印版 PDF</button> <button onclick="loadItinerary()">↻ 刷新行程</button>`,
     glance:`<button id="genCard" class="primary">🔄 生成速览</button> <button id="runResearch">🌐 联网研究</button>`,
     map:``};
   $("#hdrActions").innerHTML = acts[name] || (PREVIEW?verBadge():``);
   if(!PREVIEW&&name==="monitor"){$("#fetchAll").onclick=fetchAll;$("#addBtn").onclick=()=>openForm(null);}
   if(!PREVIEW&&name==="reflect"){$("#reflectRun").onclick=runReflect;$("#reflectRefresh").onclick=loadReflect;}
+  if(!PREVIEW&&name==="shop"){const b=$("#shopRefresh");if(b)b.onclick=refreshShopping;}
   if(name==="today")loadToday(curDay);
   if(name==="crew")loadCrew();
   if(name==="bill")loadBill();
   if(name==="reflect")loadReflect();
+  if(name==="shop")loadShopping();
   if(name==="itin")loadItinerary();
   if(name==="glance"){if(!PREVIEW){$("#genCard").onclick=genCard;$("#runResearch").onclick=runResearch;}loadGlance();}
   if(name==="map"&&!mapLoaded){watchImg($("#routemap"));$("#routemap").src=asset("routemap.svg","/api/routemap?t="+Date.now());mapLoaded=true;}
@@ -1387,6 +1407,47 @@ function cardHtml(w){
     ${buyBadge(w)}${susMark}<span class="price ${lp==null?'none':(hit?'good':'')}">${fmt(lp)}</span></div>
     <div class="meta">${metaLine(w)}${w.target_price?` · 目标 ¥${Math.round(w.target_price)}`:''}</div></div>`;
 }
+/* ---- 🛍️ 买在澳洲：购物攻略（lululemon / 退税 / 值得买） ----
+   数据来自 shopping.py 的联网研究缓存（7 天一刷），页面只读。
+   价格一律注"待复核"——攻略类信息变得快，这里给的是方向不是承诺。 */
+async function loadShopping(){
+  const el=$("#shopBody");
+  el.innerHTML=`<div class="skel skel-card"></div>`.repeat(3);
+  let d={};try{d=(await api("/api/shopping"))||{};}catch(e){el.innerHTML="加载失败："+esc(e.message);return;}
+  const has=(d.lululemon&&d.lululemon.length)||(d.buy_list&&d.buy_list.length);
+  if(!has){
+    el.innerHTML=`<div class="empty">🛍️ 还没有购物攻略数据<br><span class="hint">`
+      +(PREVIEW?"等本机跑一次联网研究后会随发布上线。":"点右上角「🌐 联网刷新」跑一次（约几分钟）。")
+      +`</span></div>`;
+    return;
+  }
+  const age=d.stale_h!=null?(d.stale_h<48?Math.round(d.stale_h)+"h 前":Math.round(d.stale_h/24)+" 天前"):"—";
+  const stale=d.stale_h!=null&&d.stale_h>24*14;
+  const li=a=>(a||[]).map(x=>"<li>"+esc(x)+"</li>").join("");
+  const rows=(d.buy_list||[]).map(b=>`<tr><td>${esc(b.item||"")}</td><td>${esc(b.price||"")}</td>`
+    +`<td>${esc(b.where||"")}</td><td>${esc(b.note||"")}</td></tr>`).join("");
+  el.innerHTML=`<div class="shop-wrap">
+    <div class="shop-hero"><h2>🛍️ 买在澳洲</h2>
+      <div class="dsub">更新于 ${age}${stale?" · ⚠️ 已较久，建议重跑":""}｜价格与门店<b>下单前以官网复核</b>
+        ${d.error?"<br><span style='color:var(--warn)'>⚠️ "+esc(d.error)+"</span>":""}</div>
+      ${d.timeline?"<div style='margin-top:8px'>🗓️ <b>购物时间线</b>："+esc(d.timeline)+"</div>":""}</div>
+    ${d.lululemon_verdict?"<div class='shop-sec'><h3>👖 lululemon · 结论</h3><div class='plan-box'>"+esc(d.lululemon_verdict)+"</div></div>":""}
+    ${(d.lululemon||[]).length?"<div class='shop-sec'><h3>👖 lululemon · 要点</h3><ul>"+li(d.lululemon)+"</ul></div>":""}
+    ${(d.trs||[]).length?"<div class='shop-sec'><h3>🧾 TRS 退税（离境地＝墨尔本机场）</h3><ul>"+li(d.trs)+"</ul></div>":""}
+    ${rows?"<div class='shop-sec'><h3>🛒 值得买清单</h3><div style='overflow-x:auto'><table class='buytab'><thead><tr><th>品类</th><th>价位</th><th>在哪买</th><th>海关 / 避坑</th></tr></thead><tbody>"+rows+"</tbody></table></div></div>":""}
+    ${(d.avoid||[]).length?"<div class='shop-sec'><h3>🚫 看着划算，其实别买</h3><ul class='avoid'>"+li(d.avoid)+"</ul></div>":""}
+    ${(d.sources||[]).length?"<div class='shop-sec'><h3>🔗 来源（"+d.sources.length+"）</h3><div class='shop-src'>"
+      +(d.sources||[]).map(u=>"<a href='"+esc(u)+"' target='_blank' rel='noopener'>"+esc(u)+"</a>").join("<br>")+"</div></div>":""}
+  </div>`;
+}
+async function refreshShopping(){
+  const b=$("#shopRefresh");if(b){b.textContent="联网中…";b.disabled=true;}
+  toast("联网研究中，约几分钟…");
+  try{await api("/api/shopping/refresh",{method:"POST"});toast("已更新");await loadShopping();}
+  catch(e){toast("失败："+e.message,false);}
+  finally{if(b){b.textContent="🌐 联网刷新";b.disabled=false;}}
+}
+
 let COMBOS=[];
 /* 联程组：监测项是按单段建的，但真实买法常是分段拼出来的（去程就是 上海→西安 + 西安→悉尼
    两张票）。"合计 vs 单票"这个唯一有决策意义的数字，此前页面上根本不存在。
