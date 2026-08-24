@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="zh-CN">
 <head>
-<script>window.PREVIEW=true;window.BUILD="20260824232818"</script>
+<script>window.PREVIEW=true;window.BUILD="20260825003048"</script>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
 <title>2026·10 澳洲行 · 行程与价格监测</title>
@@ -19,8 +19,9 @@
   body{margin:0;font:14px/1.5 -apple-system,"Segoe UI","Microsoft YaHei",sans-serif;background:var(--bg);color:var(--fg)}
   header{padding:10px 20px;border-bottom:1px solid var(--line);display:flex;align-items:center;gap:18px;flex-wrap:wrap}
   header h1{font-size:15px;margin:0;font-weight:600;white-space:nowrap}
-  .tabs{display:flex;gap:4px}
-  .tab{padding:6px 16px;border-radius:8px;cursor:pointer;color:var(--muted);font-size:14px;border:1px solid transparent}
+  .tabs{display:flex;gap:4px;flex:1 1 auto;min-width:0;overflow-x:auto;flex-wrap:nowrap;-webkit-overflow-scrolling:touch;scrollbar-width:none}
+  .tabs::-webkit-scrollbar{display:none}
+  .tab{padding:6px 16px;border-radius:8px;cursor:pointer;color:var(--muted);font-size:14px;border:1px solid transparent;white-space:nowrap}
   .tab:hover{color:var(--fg)}
   .tab.active{color:#fff;background:var(--panel2);border-color:var(--line)}
   .spacer{flex:1}
@@ -30,7 +31,7 @@
   button.danger:hover{border-color:var(--bad);color:var(--bad)}
   .view{display:none}.view.active{display:block}
   /* ---- 监测 ---- */
-  .layout{display:flex;height:calc(100vh - 52px)}
+  .layout{display:flex;height:calc(100dvh - 52px)}
   .left{width:400px;min-width:340px;border-right:1px solid var(--line);overflow:auto;padding:12px}
   .right{flex:1;overflow:auto;padding:18px 22px}
   .summary{background:linear-gradient(135deg,#1b2330,#171a21);border:1px solid var(--line);border-radius:12px;padding:12px 14px;margin-bottom:10px}
@@ -211,6 +212,8 @@
     .doc{padding:16px 14px}
     .ckwrap{padding:14px 14px 0}
     .doc table{display:block;overflow-x:auto;white-space:nowrap;-webkit-overflow-scrolling:touch}
+    /* 买在澳洲/逐航班等宽表在手机上独立横滑，避免被 body{overflow-x:hidden} 裁掉内容 */
+    .buytab,table.ftable,table.fltab{display:block;overflow-x:auto;-webkit-overflow-scrolling:touch;max-width:100%}
     .reflect,.mapwrap{padding:16px 14px}
     .glance{padding:16px 14px;gap:16px}
     button{padding:9px 14px;min-height:40px}
@@ -237,6 +240,21 @@
     #detail.open #detailBack{display:inline-flex;position:sticky;top:0;z-index:2}
   }
   @keyframes slideup{from{transform:translateY(14px);opacity:.4}to{transform:none;opacity:1}}
+  /* ---- 平板 / 横屏手机（641–1000px）：双栏仍并列但收窄侧栏，避免右栏被 400px 侧栏挤瘪 ---- */
+  @media(min-width:641px) and (max-width:1000px){
+    .left{width:clamp(280px,36vw,360px);min-width:280px}
+    .right{padding:16px 18px}
+    header{gap:12px;padding:10px 16px}
+    .doc{padding:22px 20px}
+    .reflect,.mapwrap,.glance{padding:20px 18px}
+    .ckwrap{padding:16px 20px 0}
+    #chart{height:260px}
+    .modal{width:88vw}
+  }
+  /* 横屏手机（矮视口）：两栏各自内部滚动，避免面板被压得太扁看不到内容 */
+  @media(max-width:1000px) and (max-height:560px) and (orientation:landscape){
+    .left{max-height:calc(100dvh - 52px)}
+  }
   /* 出票决策聚合卡 */
   .decision{border:1px solid var(--line);border-radius:12px;padding:12px 14px;margin-bottom:10px;background:var(--panel)}
   .decision.ready{border-color:#2ecc71;background:linear-gradient(180deg,rgba(46,204,113,.10),var(--panel))}
