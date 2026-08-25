@@ -8,7 +8,7 @@
    本地由 FastAPI GET /sw.js 提供、线上预览放在站点根，作用域均为 '/'。 */
 // 前端有结构性改动(新面板/新字段/样式修复)时**必须**升版本号：
 // stale-while-revalidate 会先返回旧 index.html，不换 key 的话老用户要多打开一次才看到新版。
-const CACHE = 'austrip-cache-v5';
+const CACHE = 'austrip-cache-v6';
 
 self.addEventListener('install', () => self.skipWaiting());
 
