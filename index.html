@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="zh-CN">
 <head>
-<script>window.PREVIEW=true;window.BUILD="20260826052614"</script>
+<script>window.PREVIEW=true;window.BUILD="20260826084606"</script>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
 <title>2026·10 澳洲行 · 行程与价格监测</title>
@@ -68,6 +68,8 @@
   header h1{font-size:15px;margin:0;font-weight:600;white-space:nowrap;letter-spacing:.2px}
   .icon-btn{background:transparent;border:1px solid var(--line);color:var(--fg2);width:34px;height:34px;padding:0;border-radius:9px;display:inline-flex;align-items:center;justify-content:center;font-size:16px;line-height:1;flex:none}
   .icon-btn:hover{border-color:var(--accent);color:var(--accent)}
+  .icon-btn.saver{border-color:var(--warn);color:var(--warn);background:var(--warn-bg)}   /* 省流量/离线模式高亮 */
+  .icon-btn.spin{animation:spin .8s linear infinite}
   .tabs{display:flex;gap:4px;flex:1 1 auto;min-width:0;overflow-x:auto;flex-wrap:nowrap;-webkit-overflow-scrolling:touch;scrollbar-width:none}
   .tabs::-webkit-scrollbar{display:none}
   .tab{padding:6px 16px;border-radius:8px;cursor:pointer;color:var(--muted);font-size:14px;border:1px solid transparent;white-space:nowrap}
@@ -416,6 +418,8 @@
     <div class="tab" data-tab="map">🗺️ 路线图</div>
   </div>
   <span class="spacer"></span>
+  <button id="forceRefresh" class="icon-btn" title="强制刷新：忽略缓存、拉取最新数据" aria-label="强制刷新">🔄</button>
+  <button id="dataMode" class="icon-btn" title="数据模式" aria-label="数据模式">📶</button>
   <button id="themeToggle" class="icon-btn" title="切换深色 / 浅色" aria-label="切换主题">🌙</button>
   <span id="hdrActions"></span>
 </header>
@@ -555,6 +559,12 @@ function applyTheme(mode,reload){        // mode: "light" | "dark" | null(跟随
 })();
 function toggleTheme(){const next=currentTheme()==="dark"?"light":"dark";localStorage.setItem("theme",next);applyTheme(next,true);}
 {const tb=document.getElementById("themeToggle");if(tb)tb.onclick=toggleTheme;}
+/* ---- 数据模式按钮 + 离线感知 ---- */
+{const fb=$("#forceRefresh");if(fb)fb.onclick=forceRefresh;
+ const db=$("#dataMode");
+ if(db){if(PREVIEW){db.onclick=toggleDataMode;updateDataModeUI();}else{db.style.display="none";}}}
+window.addEventListener("offline",()=>toast("已离线：将显示已缓存的内容",false));
+window.addEventListener("online",()=>{if(getDataMode()==="auto")toast("已恢复联网，点 🔄 可刷新到最新");});
 
 /* ---- PREVIEW 配置层：线上只读版由 publish 注入 window.PREVIEW=true ----
    同一套前端，PREVIEW 只做两件事：①隐藏写操作按钮；②GET 走 snapshot.json 而非后端。*/
@@ -611,15 +621,64 @@ function checkStale(){
     location.replace(location.pathname+"?b="+live);   // 换 URL 绕开 HTTP 缓存
   };
 }
-async function loadSnapshot(){try{
-  SNAP=await(await fetch("snapshot.json?t="+Date.now(),{cache:"no-store"})).json();
-}catch(e){
-  try{SNAP=await(await fetch("snapshot.json")).json();}catch(_){SNAP={};}   // 离线回退 SW 缓存
-}}
+/* ---- 数据模式：在线(auto=优先取最新) / 省流量·离线(saver=优先用缓存) ---- */
+const SNAP_CACHE="austrip-snap", SNAP_KEY="snapshot.json";
+function getDataMode(){return localStorage.getItem("dataMode")==="saver"?"saver":"auto";}
+async function readCachedSnap(){                         // 直接读稳定键缓存(不联网)
+  try{const m=await caches.match(SNAP_KEY);if(m)return await m.json();}catch(e){}
+  return null;
+}
+async function fetchFreshSnap(){                          // 联网取最新并写回稳定键缓存
+  const j=await(await fetch(SNAP_KEY+"?t="+Date.now(),{cache:"no-store"})).json();
+  try{const c=await caches.open(SNAP_CACHE);
+    await c.put(SNAP_KEY,new Response(JSON.stringify(j),{headers:{"Content-Type":"application/json"}}));}catch(e){}
+  return j;
+}
+async function loadSnapshot(opts){
+  const force=opts&&opts.force, saver=getDataMode()==="saver";
+  if(saver&&!force){                                     // 省流量：先吃缓存，命中就不联网
+    const c=await readCachedSnap();
+    if(c){SNAP=c;SNAP._fromCache=true;return;}
+  }
+  try{ SNAP=await fetchFreshSnap(); SNAP._fromCache=false; }   // 在线 或 省流量但无缓存：联网
+  catch(e){                                              // 断网回退缓存
+    const c=await readCachedSnap();
+    if(c){SNAP=c;SNAP._fromCache=true;}else{SNAP={};SNAP._offline=true;}
+  }
+}
+function snapWhen(){const t=((SNAP||{}).meta||{}).generated_at;return t?String(t).slice(5,16).replace("T"," "):"";}
+function updateDataModeUI(){
+  const b=$("#dataMode");if(!b)return;const saver=getDataMode()==="saver";
+  b.textContent=saver?"💾":"📶";b.classList.toggle("saver",saver);
+  b.title=saver?"省流量/离线：优先用缓存，不自动联网（点击切回在线）":"在线：自动获取最新数据（点击切到省流量/离线）";
+}
+async function reRenderActive(){                          // 用当前 SNAP 重渲染在显视图
+  try{await refresh();}catch(e){}
+  const a=document.querySelector(".tab.active");if(a&&typeof switchTab==="function")switchTab(a.dataset.tab);
+}
+async function forceRefresh(){
+  const b=$("#forceRefresh");if(b)b.classList.add("spin");
+  try{
+    if(PREVIEW)await loadSnapshot({force:true});         // 忽略模式、强拉最新
+    await reRenderActive();
+    if((SNAP||{})._offline)toast("离线且无缓存，无法刷新",false);
+    else toast("已更新到最新"+(snapWhen()?("（数据 "+snapWhen()+"）"):""));
+  }catch(e){toast("刷新失败："+(e.message||e),false);}
+  finally{if(b)b.classList.remove("spin");}
+}
+async function toggleDataMode(){
+  const next=getDataMode()==="saver"?"auto":"saver";
+  localStorage.setItem("dataMode",next);updateDataModeUI();
+  if(next==="saver"){toast("已切到省流量/离线：优先使用缓存，不自动联网");}
+  else{toast("已切到在线：正在获取最新…");if(PREVIEW)await loadSnapshot({force:true});await reRenderActive();
+    toast("已切到在线"+(snapWhen()?("（数据 "+snapWhen()+"）"):""));}
+}
 const asset=(previewName,apiUrl)=>PREVIEW?previewName:apiUrl;   // 图片资源：预览用静态文件名
-function verBadge(){const m=(SNAP||{}).meta;if(!m)return ``;
+function verBadge(){const s=SNAP||{},m=s.meta;if(!m)return ``;
   const g=m.generated_at?` · 数据 ${String(m.generated_at).slice(5,16).replace("T"," ")}`:``;
-  return `<span style="color:var(--muted);font-size:12px">${m.version} · 行程 ${m.updated}${g}</span>`;}
+  const tag=s._offline?` · <span style="color:var(--bad)">⚠️离线无缓存</span>`
+    :(s._fromCache?` · <span style="color:var(--warn)">💾缓存</span>`:``);
+  return `<span style="color:var(--muted);font-size:12px">${m.version} · 行程 ${m.updated}${g}${tag}</span>`;}
 
 function fmt(p){return p==null?"—":"¥"+Math.round(p);}
 function toast(m,ok=true){const t=$("#toast");t.textContent=m;t.className="toast show "+(ok?"ok":"err");setTimeout(()=>t.className="toast",2600);}
@@ -1751,7 +1810,7 @@ async function saveForm(){const name=$("#f_name").value.trim();if(!name){toast("
 async function delWatch(id){if(!confirm("确认删除该监测项及其历史？"))return;await api(`/api/watches/${id}`,{method:"DELETE"});
   selectedId=null;closeDetail();$("#detail").innerHTML=`<div class="empty">已删除</div>`;toast("已删除");await refresh();}
 
-(async()=>{ if(PREVIEW){await loadSnapshot();checkStale();} switchTab("today"); skeleton(); await refresh();
+(async()=>{ if(PREVIEW){await loadSnapshot();if(!(SNAP||{})._fromCache)checkStale();} switchTab("today"); skeleton(); await refresh();
   const w=+new URLSearchParams(location.search).get("w");   // 深链 ?w=<id> 直达某监测项（移动端亦可分享）
   if(w&&watches.some(x=>x.id===w))selectWatch(w);
 })();

@@ -8,13 +8,16 @@
    本地由 FastAPI GET /sw.js 提供、线上预览放在站点根，作用域均为 '/'。 */
 // 前端有结构性改动(新面板/新字段/样式修复)时**必须**升版本号：
 // stale-while-revalidate 会先返回旧 index.html，不换 key 的话老用户要多打开一次才看到新版。
-const CACHE = 'austrip-cache-v6';
+const CACHE = 'austrip-cache-v7';
+// 数据快照的**稳定键**缓存(键固定为 /snapshot.json，不带 ?t=)：
+// 供「省流量/离线模式」主动读取、以及断网回退——外壳升版时**不清除**它，数据不丢。
+const SNAP_CACHE = 'austrip-snap';
 
 self.addEventListener('install', () => self.skipWaiting());
 
 self.addEventListener('activate', (e) => e.waitUntil((async () => {
   const keys = await caches.keys();
-  await Promise.all(keys.filter(k => k !== CACHE).map(k => caches.delete(k)));
+  await Promise.all(keys.filter(k => k !== CACHE && k !== SNAP_CACHE).map(k => caches.delete(k)));
   await self.clients.claim();
 })()));
 
@@ -40,12 +43,21 @@ self.addEventListener('fetch', (e) => {
       // navigate 模式的 Request 不能用 new Request(req, {...}) 复制，故按 URL 重发。
       try {
         const res = await fetch(req.url, { cache: 'reload', credentials: 'same-origin' });
-        if (res && res.status === 200) cache.put(req, res.clone());
+        if (res && res.status === 200) {
+          cache.put(req, res.clone());
+          // snapshot.json 额外写一份到稳定键缓存(去掉 ?t= 时间戳)，供省流量/离线主动复用。
+          if (url.pathname.endsWith('/snapshot.json')) {
+            (await caches.open(SNAP_CACHE)).put('/snapshot.json', res.clone());
+          }
+        }
         return res;
       } catch (_) {
         // 断网回退缓存。页面请求要回退到缓存的 index.html（否则会把 {offline:true}
         // 这段 JSON 当页面渲染出来），取不到才给纯文本提示。
-        const cached = await cache.match(req) || (isDoc ? await cache.match('/index.html') : null);
+        // snapshot.json 的请求带 ?t= 时间戳、按原样匹配必 MISS，故先回退稳定键缓存。
+        const cached = await cache.match(req)
+          || (url.pathname.endsWith('/snapshot.json') ? await (await caches.open(SNAP_CACHE)).match('/snapshot.json') : null)
+          || (isDoc ? await cache.match('/index.html') : null);
         if (cached) return cached;
         return isDoc
           ? new Response('离线且无缓存页面', { status: 503, headers: { 'Content-Type': 'text/plain; charset=utf-8' } })
