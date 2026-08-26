@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="zh-CN">
 <head>
-<script>window.PREVIEW=true;window.BUILD="20260826215225"</script>
+<script>window.PREVIEW=true;window.BUILD="20260826220814"</script>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
 <title>2026·10 澳洲行 · 行程与价格监测</title>
@@ -122,18 +122,35 @@
   details.runs summary{cursor:pointer;color:var(--muted)}
   .runrow{display:flex;justify-content:space-between;padding:3px 0;border-bottom:1px dashed var(--line);color:var(--muted)}
   /* 买在澳洲 */
-  .shop-wrap{max-width:1000px}
-  .shop-hero{background:var(--panel2);border:1px solid var(--line);border-radius:12px;padding:14px 16px;margin:0 0 14px}
-  .shop-hero h2{margin:0 0 6px;font-size:17px}
-  .shop-sec{margin:0 0 18px}
-  .shop-sec>h3{font-size:15px;margin:0 0 8px;display:flex;align-items:center;gap:8px}
-  .shop-sec ul{margin:0;padding-left:20px;line-height:1.85}
-  .buytab{width:100%;border-collapse:collapse;font-size:13px}
-  .buytab th,.buytab td{border:1px solid var(--line);padding:7px 9px;text-align:left;vertical-align:top}
-  .buytab th{background:var(--panel2);font-weight:600;white-space:nowrap}
-  .buytab td:first-child{white-space:nowrap;font-weight:600}
-  .avoid li{color:var(--warn)}
-  .shop-src{font-size:12px;color:var(--muted);word-break:break-all;line-height:1.7}
+  .shop-wrap{max-width:1000px;margin:0 auto;padding:0 2px}
+  .shop-hero{background:var(--grad-card);border:1px solid var(--line);border-radius:14px;padding:14px 16px;margin:0 0 6px}
+  .shop-hero .stitle{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+  .shop-hero h2{margin:0;font-size:19px}
+  .freshpill{font-size:12px;padding:2px 10px;border-radius:999px;border:1px solid var(--line);color:var(--muted);white-space:nowrap}
+  .freshpill.stale{color:var(--warn);border-color:var(--warn-bd);background:var(--warn-bg)}
+  .shop-note{color:var(--muted);font-size:12.5px;margin-top:8px;line-height:1.65}
+  .shop-note b{color:var(--fg2)}
+  .shop-sec{margin:20px 0 0}
+  .shop-sec>h3{font-size:15px;margin:0 0 10px;display:flex;align-items:center;gap:8px;padding-bottom:7px;border-bottom:1px solid var(--line)}
+  .shop-muted{color:var(--muted);font-size:12px}
+  .shop-verdict{background:var(--accent-bg);border:1px solid var(--c-blue-bd);border-radius:10px;padding:11px 13px;line-height:1.75}
+  .shop-timeline{background:var(--panel);border:1px solid var(--line);border-left:3px solid var(--accent);border-radius:10px;padding:11px 14px;line-height:1.8;box-shadow:var(--shadow-1)}
+  .shop-list{list-style:none;margin:0;padding:0}
+  .shop-list li{position:relative;padding:7px 0 7px 20px;line-height:1.7;border-bottom:1px dashed var(--line)}
+  .shop-list li:last-child{border-bottom:0}
+  .shop-list li::before{content:"";position:absolute;left:3px;top:14px;width:6px;height:6px;border-radius:50%;background:var(--accent)}
+  .buygrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(258px,1fr));gap:10px}
+  .buycard{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:11px 13px;box-shadow:var(--shadow-1)}
+  .buycard .bt{font-weight:600;font-size:14px;margin-bottom:7px;line-height:1.4}
+  .buycard .brow{font-size:12.5px;line-height:1.6;margin:5px 0;color:var(--fg2);display:flex;gap:6px}
+  .buycard .brow .bk{color:var(--muted);flex:none}
+  .buycard .brow .bprice{color:var(--good);font-weight:600}
+  .avoidlist{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:7px}
+  .avoidlist li{background:var(--warn-bg);border:1px solid var(--warn-bd);border-radius:8px;padding:8px 11px;font-size:12.5px;line-height:1.6}
+  .shop-src summary{cursor:pointer;color:var(--muted);font-size:13px}
+  .srcchips{display:flex;flex-wrap:wrap;gap:7px;margin-top:10px}
+  .srcchips a{font-size:11.5px;padding:3px 10px;border-radius:999px;border:1px solid var(--line);color:var(--accent);text-decoration:none;background:var(--panel)}
+  .srcchips a:hover{border-color:var(--accent)}
   /* 联程组：把"自行中转的两段"当一趟行程看 */
   .combo{background:var(--panel2);border:1px solid var(--line);border-radius:10px;padding:10px 12px;margin:0 0 8px}
   .combo.win{border-color:var(--good)}
@@ -1576,21 +1593,30 @@ async function loadShopping(){
   }
   const age=d.stale_h!=null?(d.stale_h<48?Math.round(d.stale_h)+"h 前":Math.round(d.stale_h/24)+" 天前"):"—";
   const stale=d.stale_h!=null&&d.stale_h>24*14;
-  const li=a=>(a||[]).map(x=>"<li>"+esc(x)+"</li>").join("");
-  const rows=(d.buy_list||[]).map(b=>`<tr><td>${esc(b.item||"")}</td><td>${esc(b.price||"")}</td>`
-    +`<td>${esc(b.where||"")}</td><td>${esc(b.note||"")}</td></tr>`).join("");
+  // 把末尾的（待复核）/（来源…）降噪成灰字，正文更清爽
+  const dim=t=>esc(t).replace(/（(待复核|来源[^）]*)）/g,'<span class="shop-muted">（$1）</span>');
+  const li=a=>(a||[]).map(x=>"<li>"+dim(x)+"</li>").join("");
+  const host=u=>{try{return new URL(u).hostname.replace(/^www\./,"");}catch(e){return u;}};
+  const buyCards=(d.buy_list||[]).map(b=>`<div class="buycard">
+      <div class="bt">🛍️ ${esc(b.item||"")}</div>
+      ${b.price?`<div class="brow"><span class="bk">💰</span><span class="bprice">${dim(b.price)}</span></div>`:""}
+      ${b.where?`<div class="brow"><span class="bk">📍</span><span>${dim(b.where)}</span></div>`:""}
+      ${b.note?`<div class="brow"><span class="bk">ℹ️</span><span>${dim(b.note)}</span></div>`:""}
+    </div>`).join("");
   el.innerHTML=`<div class="shop-wrap">
-    <div class="shop-hero"><h2>🛍️ 买在澳洲</h2>
-      <div class="dsub">更新于 ${age}${stale?" · ⚠️ 已较久，建议重跑":""}｜价格与门店<b>下单前以官网复核</b>
+    <div class="shop-hero">
+      <div class="stitle"><h2>🛍️ 买在澳洲</h2>
+        <span class="freshpill${stale?" stale":""}">更新于 ${age}${stale?" · 建议重跑":""}</span></div>
+      <div class="shop-note">价格与门店信息仅供参考，<b>下单前以官网 / 门店当日实价复核</b>；带回国注意海关规定与自用合理数量。
         ${d.error?"<br><span style='color:var(--warn)'>⚠️ "+esc(d.error)+"</span>":""}</div>
-      ${d.timeline?"<div style='margin-top:8px'>🗓️ <b>购物时间线</b>："+esc(d.timeline)+"</div>":""}</div>
-    ${d.lululemon_verdict?"<div class='shop-sec'><h3>👖 lululemon · 结论</h3><div class='plan-box'>"+esc(d.lululemon_verdict)+"</div></div>":""}
-    ${(d.lululemon||[]).length?"<div class='shop-sec'><h3>👖 lululemon · 要点</h3><ul>"+li(d.lululemon)+"</ul></div>":""}
-    ${(d.trs||[]).length?"<div class='shop-sec'><h3>🧾 TRS 退税（离境地＝墨尔本机场）</h3><ul>"+li(d.trs)+"</ul></div>":""}
-    ${rows?"<div class='shop-sec'><h3>🛒 值得买清单</h3><div style='overflow-x:auto'><table class='buytab'><thead><tr><th>品类</th><th>价位</th><th>在哪买</th><th>海关 / 避坑</th></tr></thead><tbody>"+rows+"</tbody></table></div></div>":""}
-    ${(d.avoid||[]).length?"<div class='shop-sec'><h3>🚫 看着划算，其实别买</h3><ul class='avoid'>"+li(d.avoid)+"</ul></div>":""}
-    ${(d.sources||[]).length?"<div class='shop-sec'><h3>🔗 来源（"+d.sources.length+"）</h3><div class='shop-src'>"
-      +(d.sources||[]).map(u=>"<a href='"+esc(u)+"' target='_blank' rel='noopener'>"+esc(u)+"</a>").join("<br>")+"</div></div>":""}
+    </div>
+    ${d.timeline?`<div class="shop-sec"><h3>🗺️ 购物动线（按行程）</h3><div class="shop-timeline">${dim(d.timeline)}</div></div>`:""}
+    ${d.lululemon_verdict?`<div class="shop-sec"><h3>👖 lululemon · 结论</h3><div class="shop-verdict">${dim(d.lululemon_verdict)}</div></div>`:""}
+    ${(d.lululemon||[]).length?`<div class="shop-sec"><h3>👖 lululemon · 要点</h3><ul class="shop-list">${li(d.lululemon)}</ul></div>`:""}
+    ${buyCards?`<div class="shop-sec"><h3>🛒 值得买清单</h3><div class="buygrid">${buyCards}</div></div>`:""}
+    ${(d.trs||[]).length?`<div class="shop-sec"><h3>🧾 TRS 退税（离境地＝墨尔本机场）</h3><ul class="shop-list">${li(d.trs)}</ul></div>`:""}
+    ${(d.avoid||[]).length?`<div class="shop-sec"><h3>🚫 看着划算，其实别买</h3><ul class="avoidlist">${(d.avoid||[]).map(x=>"<li>🚫 "+dim(x)+"</li>").join("")}</ul></div>`:""}
+    ${(d.sources||[]).length?`<div class="shop-sec shop-src"><details><summary>🔗 参考来源（${d.sources.length}）</summary><div class="srcchips">${(d.sources||[]).map(u=>`<a href="${esc(u)}" target="_blank" rel="noopener">${esc(host(u))}</a>`).join("")}</div></details></div>`:""}
   </div>`;
 }
 async function refreshShopping(){
