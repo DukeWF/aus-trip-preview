@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="zh-CN">
 <head>
-<script>window.PREVIEW=true;window.BUILD="20260826112749"</script>
+<script>window.PREVIEW=true;window.BUILD="20260826215225"</script>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
 <title>2026·10 澳洲行 · 行程与价格监测</title>
@@ -562,7 +562,7 @@ function toggleTheme(){const next=currentTheme()==="dark"?"light":"dark";localSt
 /* ---- 数据模式按钮 + 离线感知 ---- */
 {const fb=$("#forceRefresh");if(fb)fb.onclick=forceRefresh;
  const db=$("#dataMode");
- if(db){if(PREVIEW){db.onclick=toggleDataMode;updateDataModeUI();}else{db.style.display="none";}}}
+ if(db){if(window.PREVIEW){db.onclick=toggleDataMode;updateDataModeUI();}else{db.style.display="none";}}}
 window.addEventListener("offline",()=>toast("已离线：将显示已缓存的内容",false));
 window.addEventListener("online",()=>{if(getDataMode()==="auto")toast("已恢复联网，点 🔄 可刷新到最新");});
 
