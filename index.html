@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="zh-CN">
 <head>
-<script>window.PREVIEW=true;window.BUILD="20260827234418"</script>
+<script>window.PREVIEW=true;window.BUILD="20260828002433"</script>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
 <title>2026·10 澳洲行 · 行程与价格监测</title>
@@ -218,8 +218,16 @@
   .pi-action{font-size:12.5px;line-height:1.65;color:var(--fg2);margin:2px 0 0}
   .pi-files{font-size:11.5px;color:var(--muted);margin-top:5px;word-break:break-all}
   .pi-act{margin-top:9px}
+  .pi-act{display:flex;gap:8px;flex-wrap:wrap}
   .pi-act .exec-one{font-size:12.5px;padding:5px 12px;background:var(--accent-bg);color:var(--accent);border:1px solid var(--c-blue-bd)}
   .pi-act .exec-one:hover{background:var(--accent);color:var(--on-accent);border-color:var(--accent)}
+  .pi-act .edit-one{font-size:12.5px;padding:5px 12px}
+  .pi-tag-edit{font-size:10.5px;font-weight:600;padding:1px 8px;border-radius:999px;background:var(--warn-bg);color:var(--warn);border:1px solid var(--warn-bd);flex:none}
+  .pi-edit{margin:2px 0 0}
+  .pi-ta{width:100%;font:12.5px/1.6 inherit;background:var(--panel2);border:1px solid var(--accent);color:var(--fg);border-radius:9px;padding:8px 10px;resize:vertical}
+  .pi-ta:focus{outline:none}
+  .pi-editbar{display:flex;gap:8px;margin-top:8px}
+  .pi-editbar button{font-size:12.5px;padding:5px 12px}
   /* 联程组：把"自行中转的两段"当一趟行程看 */
   .combo{background:var(--panel2);border:1px solid var(--line);border-radius:10px;padding:10px 12px;margin:0 0 8px}
   .combo.win{border-color:var(--good)}
@@ -1776,42 +1784,69 @@ function renderProc(s){
   if(r.phase==="execute"||r.summary!==undefined)renderExecResult(r);
   else renderPlan(r);
 }
+const canExec=p=>!!((p.action||'').trim());   // 有处置动作(Opus 给的或用户写的)即可执行
+let _planModel="",_execBox="";
+function _pi(ts){return (_plan||[]).find(p=>p.ts===ts);}
 function planItemHtml(p){
+  const editing=!!p._editing;
+  const body=editing
+    ? `<div class="pi-edit"><textarea class="pi-ta" data-ts="${esc(p.ts||'')}" rows="3" placeholder="写清要怎么处置（会按这段交给 Opus 执行）">${esc(p.action||'')}</textarea>
+        <div class="pi-editbar"><button class="primary pi-save" data-ts="${esc(p.ts||'')}">保存</button>
+          <button class="pi-cancel" data-ts="${esc(p.ts||'')}">取消</button></div></div>`
+    : `<div class="pi-action">${esc(p.action?p.action:(p.doable?'（未给出计划）':(p.reason||'（未给出原因）')))}</div>`;
   return `<div class="plan-item ${p.doable?'':'no'}">
     <div class="pi-head"><span class="pi-badge ${p.doable?'ok':'no'}">${p.doable?'可执行':'需人工'}</span>
+      ${p._edited?'<span class="pi-tag-edit">已编辑</span>':''}
       <span class="pi-text">${esc(p.text||'')}</span></div>
-    <div class="pi-action">${esc(p.doable?(p.action||'（未给出计划）'):(p.reason||'（未给出原因）'))}</div>
+    ${body}
     ${p.files&&p.files.length?`<div class="pi-files">📄 ${p.files.map(f=>esc(f)).join(' · ')}</div>`:""}
-    ${p.doable?`<div class="pi-act"><button class="exec-one" data-ts="${esc(p.ts||'')}">✅ 执行此条</button></div>`:""}
+    ${editing?"":`<div class="pi-act">
+      ${canExec(p)?`<button class="exec-one" data-ts="${esc(p.ts||'')}">✅ 执行此条</button>`:""}
+      <button class="edit-one" data-ts="${esc(p.ts||'')}">✏️ ${p.doable?'编辑方案':'我来写方案'}</button></div>`}
   </div>`;
 }
-function wirePlan(el){
-  el.querySelectorAll(".exec-one").forEach(b=>b.onclick=()=>execItems([b.dataset.ts]));
-  const ea=el.querySelector("#execAllBtn");if(ea)ea.onclick=()=>execItems((_plan||[]).filter(p=>p.doable).map(p=>p.ts));
-}
-function planPanelHtml(plan,model,extraTop){
-  const doableN=plan.filter(p=>p.doable).length;
+function planPanelHtml(plan,model){
+  const okN=plan.filter(canExec).length;
   return `<div class="plan-wrap">
-    ${extraTop||""}
-    <div class="plan-top"><b>处置计划</b><span class="proc-meta">${esc(model||'')} · 可执行 ${doableN}/${plan.length}</span>
-      ${doableN?`<button class="primary" id="execAllBtn">全部执行(${doableN})</button>`:""}</div>
+    <div class="plan-top"><b>处置计划</b><span class="proc-meta">${esc(model||'')} · 可执行 ${okN}/${plan.length} · 动作可编辑</span>
+      ${okN?`<button class="primary" id="execAllBtn">全部执行(${okN})</button>`:""}</div>
     ${plan.map(planItemHtml).join("")}</div>`;
 }
-function renderPlan(r){
-  const el=$("#procPanel");
-  if(!r.ok){el.innerHTML=`<div class="proc-res err"><div class="proc-h">计划生成失败</div><div class="proc-note">${esc(r.note||"")}</div></div>`;return;}
-  _plan=(r.plan||[]).filter(p=>p.ts);
-  if(!_plan.length){el.innerHTML=`<div class="empty" style="margin:14px 0">${esc(r.note||"没有待处置的备忘")}</div>`;return;}
-  el.innerHTML=planPanelHtml(_plan,r.model);
+function wirePlan(el){
+  el.querySelectorAll(".exec-one").forEach(b=>b.onclick=()=>{const p=_pi(b.dataset.ts);execItems([{ts:b.dataset.ts,action:p?p.action:''}]);});
+  el.querySelectorAll(".edit-one").forEach(b=>b.onclick=()=>editPlan(b.dataset.ts));
+  el.querySelectorAll(".pi-save").forEach(b=>b.onclick=()=>savePlan(b.dataset.ts));
+  el.querySelectorAll(".pi-cancel").forEach(b=>b.onclick=()=>cancelPlan(b.dataset.ts));
+  const ea=el.querySelector("#execAllBtn");if(ea)ea.onclick=()=>execItems((_plan||[]).filter(canExec).map(p=>({ts:p.ts,action:p.action})));
+}
+function rerenderPlan(){
+  const el=$("#procPanel");if(!el)return;
+  el.innerHTML=(_execBox||"")+(_plan&&_plan.length?planPanelHtml(_plan,_planModel):"");
   wirePlan(el);
 }
-async function execItems(tsList){
-  tsList=(tsList||[]).filter(Boolean);if(!tsList.length)return;
-  const one=tsList.length===1?(_plan||[]).find(p=>p.ts===tsList[0]):null;
-  const msg=one?`执行这一条处置？\n\n备忘：${one.text}\n计划：${one.action}\n\n会按计划改文件并自动提交，可能几分钟。`
-    :`执行选中的 ${tsList.length} 条处置？\n会按各自计划改文件并自动提交，可能几分钟、消耗较多 Opus 额度。`;
+function editPlan(ts){const p=_pi(ts);if(p){(_plan||[]).forEach(q=>q._editing=false);p._editing=true;rerenderPlan();
+  const ta=$(`.pi-ta[data-ts="${ts}"]`);if(ta){ta.focus();ta.setSelectionRange(ta.value.length,ta.value.length);}}}
+function cancelPlan(ts){const p=_pi(ts);if(p){p._editing=false;rerenderPlan();}}
+function savePlan(ts){const p=_pi(ts);if(!p)return;
+  const ta=$(`.pi-ta[data-ts="${ts}"]`);const v=ta?ta.value.trim():'';
+  if(v!==(p.action||''))p._edited=true;
+  p.action=v;p._editing=false;rerenderPlan();
+  toast(v?"方案已保存":"已清空该条方案");}
+function renderPlan(r){
+  const el=$("#procPanel");_execBox="";
+  if(!r.ok){el.innerHTML=`<div class="proc-res err"><div class="proc-h">计划生成失败</div><div class="proc-note">${esc(r.note||"")}</div></div>`;return;}
+  _plan=(r.plan||[]).filter(p=>p.ts);_planModel=r.model||"";
+  if(!_plan.length){el.innerHTML=`<div class="empty" style="margin:14px 0">${esc(r.note||"没有待处置的备忘")}</div>`;return;}
+  rerenderPlan();
+}
+async function execItems(items){
+  items=(items||[]).filter(x=>x&&x.ts&&(x.action||'').trim());
+  if(!items.length){toast("这条还没有处置方案，先点「编辑方案」写一下",false);return;}
+  const one=items.length===1?_pi(items[0].ts):null;
+  const msg=one?`执行这一条处置？\n\n备忘：${one.text}\n处置方案：${items[0].action}\n\n会按此方案改文件并自动提交，可能几分钟。`
+    :`执行选中的 ${items.length} 条处置？\n会按各自方案改文件并自动提交，可能几分钟、消耗较多 Opus 额度。`;
   if(!await confirmDialog(msg,{title:"确认执行处置",okText:"执行"}))return;
-  try{const r=await api("/api/intake/execute",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({ts:tsList})});
+  try{const r=await api("/api/intake/execute",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({items})});
     if(r&&r.ok){toast(r.message||"开始执行");pollProcess();}
     else{toast((r&&r.message)||"启动失败",false);}
   }catch(e){toast("启动失败："+(e.message||e),false);}
@@ -1821,13 +1856,12 @@ function renderExecResult(r){
   const post=r.post||{};
   const badge=r.ok?(post.committed?`已提交 ${esc(post.commit||'')}${post.itinerary_changed?' · 已发布线上':''}`:"未改动文件"):"未完成";
   const done=new Set(r.done_ts||[]);_plan=(_plan||[]).filter(p=>!done.has(p.ts));
-  const remain=_plan.filter(p=>p.doable);
-  const box=`<div class="proc-res ${r.ok?'ok':'err'}">
+  const remain=_plan.filter(canExec);
+  _execBox=`<div class="proc-res ${r.ok?'ok':'err'}">
     <div class="proc-h">🧠 执行结果<span class="proc-meta">${esc(r.model||'')} · ${esc((r.finished_at||'').slice(5,16).replace('T',' '))} · ${badge}</span></div>
     <pre class="proc-sum">${esc(r.summary||'')}</pre>
-    <div class="proc-note">已处置的备忘已自动勾掉。${remain.length?`下方是计划里还没执行的 ${remain.length} 条，可继续逐条执行。`:'点上方「生成处置计划」可重新规划剩余备忘。'}</div></div>`;
-  el.innerHTML=box+(remain.length?planPanelHtml(_plan,r.model):"");
-  if(remain.length)wirePlan(el);
+    <div class="proc-note">已处置的备忘已自动勾掉。${remain.length?`下方是计划里还没执行的 ${remain.length} 条，可继续编辑/执行。`:'点上方「生成处置计划」可重新规划剩余备忘。'}</div></div>`;
+  rerenderPlan();
   renderMemos();
 }
 async function intakeParse(){
