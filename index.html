@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="zh-CN">
 <head>
-<script>window.PREVIEW=true;window.BUILD="20260827172617"</script>
+<script>window.PREVIEW=true;window.BUILD="20260827230906"</script>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
 <title>2026·10 澳洲行 · 行程与价格监测</title>
@@ -162,6 +162,32 @@
   .srcchips{display:flex;flex-wrap:wrap;gap:7px;margin-top:10px}
   .srcchips a{font-size:11.5px;padding:4px 11px;border-radius:999px;border:1px solid var(--line);color:var(--accent);text-decoration:none;background:var(--panel)}
   .srcchips a:hover{border-color:var(--accent);background:var(--accent-bg)}
+  /* 🤖 AI 录入 */
+  .intake-wrap{max-width:800px;margin:0 auto;padding:4px 2px}
+  .intake-note{color:var(--muted);font-size:12.5px;line-height:1.75;margin:6px 0 12px}
+  .intake-note b{color:var(--warn)}
+  #intakeText{width:100%;font:14px/1.6 inherit;background:var(--panel);border:1px solid var(--line);color:var(--fg);border-radius:10px;padding:10px 12px;resize:vertical}
+  #intakeText:focus{outline:none;border-color:var(--accent)}
+  .intake-bar{display:flex;gap:8px;margin-top:10px}
+  .proposal{margin-top:14px;background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:13px 15px;box-shadow:var(--shadow-1)}
+  .proposal.memo{border-color:var(--warn-bd)}
+  .p-head{display:flex;align-items:center;gap:10px;margin-bottom:7px}
+  .p-tag{font-size:12px;font-weight:600;padding:2px 11px;border-radius:999px;background:var(--accent-bg);color:var(--accent)}
+  .proposal.memo .p-tag{background:var(--warn-bg);color:var(--warn)}
+  .p-conf{color:var(--muted);font-size:12px}
+  .p-summary{font-size:14px;line-height:1.6;margin-bottom:9px}
+  .p-params{background:var(--panel2);border-radius:9px;padding:9px 11px;font-size:12.5px}
+  .pp-row{display:flex;gap:10px;padding:3px 0}
+  .pp-k{color:var(--muted);min-width:82px;flex:none}
+  .p-note{color:var(--warn);font-size:12px;margin-top:9px;line-height:1.6}
+  .p-actions{display:flex;gap:8px;margin-top:13px}
+  .memo{display:flex;align-items:center;gap:11px;background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:9px 12px;margin-bottom:7px;box-shadow:var(--shadow-1)}
+  .memo.done .memo-t{text-decoration:line-through;color:var(--muted)}
+  .memo input[type=checkbox]{accent-color:var(--good);flex:none}
+  .memo-t{flex:1;font-size:13px;line-height:1.5;min-width:0}
+  .memo-ts{color:var(--muted);font-size:11px;flex:none;font-variant-numeric:tabular-nums}
+  .memo-del{color:var(--muted);cursor:pointer;flex:none;font-size:13px;padding:0 2px}
+  .memo-del:hover{color:var(--bad)}
   /* 联程组：把"自行中转的两段"当一趟行程看 */
   .combo{background:var(--panel2);border:1px solid var(--line);border-radius:10px;padding:10px 12px;margin:0 0 8px}
   .combo.win{border-color:var(--good)}
@@ -440,6 +466,7 @@
     <div class="tab" data-tab="bill">💰 账单</div>
     <div class="tab" data-tab="monitor">✈️ 价格监测</div>
     <div class="tab" data-tab="reflect">🔍 自省</div>
+    <div class="tab" data-tab="intake">🤖 录入</div>
     <div class="tab" data-tab="shop">🛍️ 买在澳洲</div>
     <div class="tab" data-tab="itin">📋 行程</div>
     <div class="tab" data-tab="glance">📸 速览</div>
@@ -499,6 +526,24 @@
 
 <!-- ===== 自省 ===== -->
 <div class="view" id="view-reflect"><div class="reflect" id="reflectBody">加载中…</div></div>
+
+<!-- ===== 行程 ===== -->
+<!-- ===== 🤖 AI 录入（本地专用） ===== -->
+<div class="view" id="view-intake">
+  <div class="intake-wrap">
+    <div class="shead"><span class="bar"></span>🤖 AI 录入</div>
+    <div class="intake-note">用大白话说要记什么 / 改什么，AI 解析成一次操作、你确认后才落库。<b>本地专用，不上线</b>。<br>
+      例：「大堡礁那天记得带防蜇衣」「把悉尼酒店目标价改成 600」「加个监测 悉尼到墨尔本机票」「10.6 早上 7 点去鱼市」</div>
+    <textarea id="intakeText" rows="3" placeholder="说点什么…（Ctrl/⌘+Enter 解析）"></textarea>
+    <div class="intake-bar">
+      <button class="primary" id="intakeParseBtn">🤖 解析</button>
+      <button id="intakeClearBtn">清空</button>
+    </div>
+    <div id="intakeProposal"></div>
+    <div class="shead" style="margin-top:26px"><span class="bar"></span>📥 备忘收件箱<span class="cnt" id="memoCnt"></span></div>
+    <div id="memoList"></div>
+  </div>
+</div>
 
 <!-- ===== 行程 ===== -->
 <div class="view" id="view-shop"><div id="shopBody">加载中…</div></div>
@@ -790,6 +835,7 @@ function switchTab(name){
   if(name==="bill")loadBill();
   if(name==="reflect")loadReflect();
   if(name==="shop")loadShopping();
+  if(name==="intake")loadIntake();
   if(name==="itin")loadItinerary();
   if(name==="glance"){if(!PREVIEW){$("#genCard").onclick=genCard;$("#runResearch").onclick=runResearch;}loadGlance();}
   if(name==="map"&&!mapLoaded){watchImg($("#routemap"));$("#routemap").src=asset("routemap.svg","/api/routemap?t="+Date.now());mapLoaded=true;}
@@ -797,7 +843,8 @@ function switchTab(name){
 document.querySelectorAll(".tab").forEach(t=>t.onclick=()=>switchTab(t.dataset.tab));
 /* 线上不做账单（用户 2026-08-15 定）：整个页签摘掉，而不是留个空壳让人点进去看"尚未发布"。
    快照里也不再带密文（见 publish.PUBLISH_LEDGER），所以这里没有可显示的东西。 */
-if(PREVIEW){const b=document.querySelector('.tab[data-tab="bill"]');if(b)b.remove();}
+if(PREVIEW){const b=document.querySelector('.tab[data-tab="bill"]');if(b)b.remove();
+  const ib=document.querySelector('.tab[data-tab="intake"]');if(ib)ib.remove();}   /* 🤖录入为本地授权工具，线上摘掉 */
 
 /* ---- 今日：左侧日历/日列表，右侧当日详情 ---- */
 const RISK_TXT={high:"🔴 强依赖天气",med:"🟡 部分靠天",low:"⚪ 天气影响小",none:""};
@@ -1639,6 +1686,61 @@ async function refreshShopping(){
   try{await api("/api/shopping/refresh",{method:"POST"});toast("已更新");await loadShopping();}
   catch(e){toast("失败："+e.message,false);}
   finally{if(b){b.textContent="🌐 联网刷新";b.disabled=false;}}
+}
+
+/* ---- 🤖 AI 录入：自然语言 → 提案 → 确认 → 落库（本地专用） ---- */
+const INTENT_CN={day_item:"加行程条目",watch_target:"改目标价",watch_add:"加监测项",memo:"记备忘"};
+let _proposal=null;
+function loadIntake(){
+  const b=$("#intakeParseBtn");if(b)b.onclick=intakeParse;
+  const c=$("#intakeClearBtn");if(c)c.onclick=()=>{$("#intakeText").value="";$("#intakeProposal").innerHTML="";_proposal=null;};
+  const ta=$("#intakeText");if(ta)ta.onkeydown=e=>{if((e.metaKey||e.ctrlKey)&&e.key==="Enter")intakeParse();};
+  renderMemos();
+}
+async function intakeParse(){
+  const t=($("#intakeText").value||"").trim();if(!t){toast("先输入点内容",false);return;}
+  const b=$("#intakeParseBtn");b.disabled=true;b.textContent="🤖 解析中…";
+  try{_proposal=await api("/api/intake/parse",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({text:t})});
+    renderProposal(_proposal);
+  }catch(e){toast("解析失败："+(e.message||e),false);}
+  finally{b.disabled=false;b.textContent="🤖 解析";}
+}
+function renderProposal(p){
+  const el=$("#intakeProposal");if(!p){el.innerHTML="";return;}
+  const rows=Object.entries(p.params||{}).filter(([k])=>k!=="text"||p.intent==="memo")
+    .map(([k,v])=>`<div class="pp-row"><span class="pp-k">${esc(k)}</span><span>${esc(v==null?"":String(v))}</span></div>`).join("");
+  el.innerHTML=`<div class="proposal ${esc(p.intent)}">
+    <div class="p-head"><span class="p-tag">${esc(INTENT_CN[p.intent]||p.intent)}</span>
+      <span class="p-conf">置信度 ${Math.round((p.confidence||0)*100)}%</span></div>
+    <div class="p-summary">${esc(p.summary||"")}</div>
+    ${rows?`<div class="p-params">${rows}</div>`:""}
+    ${p.note?`<div class="p-note">⚠️ ${esc(p.note)}</div>`:""}
+    <div class="p-actions"><button class="primary" id="intakeApplyBtn">✅ 确认执行</button>
+      <button id="intakeCancelBtn">取消</button></div></div>`;
+  $("#intakeApplyBtn").onclick=intakeApply;
+  $("#intakeCancelBtn").onclick=()=>{el.innerHTML="";_proposal=null;};
+}
+async function intakeApply(){
+  if(!_proposal)return;
+  const b=$("#intakeApplyBtn");b.disabled=true;b.textContent="执行中…";
+  try{const r=await api("/api/intake/apply",{method:"POST",headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({intent:_proposal.intent,params:_proposal.params||{}})});
+    if(r&&r.ok){toast(r.message||"已执行");$("#intakeProposal").innerHTML="";$("#intakeText").value="";_proposal=null;renderMemos();}
+    else{toast((r&&r.message)||"执行失败",false);b.disabled=false;b.textContent="✅ 确认执行";}
+  }catch(e){toast("执行失败："+(e.message||e),false);b.disabled=false;b.textContent="✅ 确认执行";}
+}
+async function renderMemos(){
+  let ms=[];try{ms=await api("/api/intake/memos")||[];}catch(e){}
+  const cnt=$("#memoCnt");if(cnt)cnt.textContent=ms.length?" "+ms.length:"";
+  const el=$("#memoList");if(!el)return;
+  if(!ms.length){el.innerHTML=`<div class="empty" style="margin:18px 0">还没有备忘</div>`;return;}
+  el.innerHTML=ms.map((m,i)=>`<div class="memo ${m.done?'done':''}">
+    <input type="checkbox" ${m.done?'checked':''} data-i="${i}">
+    <span class="memo-t">${esc(m.text||"")}</span>
+    <span class="memo-ts">${esc((m.ts||'').slice(5,16).replace('T',' '))}</span>
+    <span class="memo-del" data-i="${i}" title="删除">✕</span></div>`).join("");
+  el.querySelectorAll('input[type=checkbox]').forEach(c=>c.onchange=async()=>{await api(`/api/intake/memo/${c.dataset.i}/toggle`,{method:"POST"});renderMemos();});
+  el.querySelectorAll('.memo-del').forEach(x=>x.onclick=async()=>{await api(`/api/intake/memo/${x.dataset.i}`,{method:"DELETE"});renderMemos();});
 }
 
 let COMBOS=[];
