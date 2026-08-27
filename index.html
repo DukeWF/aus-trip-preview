@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="zh-CN">
 <head>
-<script>window.PREVIEW=true;window.BUILD="20260827232754"</script>
+<script>window.PREVIEW=true;window.BUILD="20260827234418"</script>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
 <title>2026·10 澳洲行 · 行程与价格监测</title>
@@ -80,6 +80,10 @@
   button:hover{border-color:var(--accent)}
   button.primary{background:var(--accent);border-color:var(--accent);color:var(--on-accent)}
   button.danger:hover{border-color:var(--bad);color:var(--bad)}
+  button.solid-danger{background:var(--bad);border-color:var(--bad);color:#fff}
+  button.solid-danger:hover{filter:brightness(1.05)}
+  /* 页面内确认框正文 */
+  .cf-msg{font-size:13.5px;line-height:1.75;color:var(--fg);white-space:pre-wrap;margin:0 0 16px}
   .view{display:none}.view.active{display:block}
   /* ---- 监测 ---- */
   .layout{display:flex;height:calc(100dvh - 52px)}
@@ -199,6 +203,23 @@
   .proc-meta{color:var(--muted);font-size:11.5px;font-weight:400}
   .proc-sum{white-space:pre-wrap;word-break:break-word;font-size:12.5px;line-height:1.7;background:var(--panel2);border-radius:9px;padding:10px 12px;margin:0;font-family:inherit}
   .proc-note{color:var(--muted);font-size:12px;margin-top:9px;line-height:1.6}
+  /* 处置计划 */
+  .plan-wrap{margin:12px 0}
+  .plan-top{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin:0 0 10px;font-size:14px}
+  .plan-top .proc-meta{font-weight:400}
+  .plan-top #execAllBtn{margin-left:auto;font-size:12.5px;padding:5px 12px}
+  .plan-item{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:11px 13px;margin-bottom:9px;box-shadow:var(--shadow-1)}
+  .plan-item.no{opacity:.85;border-style:dashed}
+  .pi-head{display:flex;align-items:flex-start;gap:9px;margin-bottom:6px}
+  .pi-badge{font-size:11px;font-weight:600;padding:2px 9px;border-radius:999px;flex:none;white-space:nowrap}
+  .pi-badge.ok{background:var(--good-bg);color:var(--good);border:1px solid var(--good-bd)}
+  .pi-badge.no{background:var(--warn-bg);color:var(--warn);border:1px solid var(--warn-bd)}
+  .pi-text{font-size:13px;line-height:1.5;font-weight:500}
+  .pi-action{font-size:12.5px;line-height:1.65;color:var(--fg2);margin:2px 0 0}
+  .pi-files{font-size:11.5px;color:var(--muted);margin-top:5px;word-break:break-all}
+  .pi-act{margin-top:9px}
+  .pi-act .exec-one{font-size:12.5px;padding:5px 12px;background:var(--accent-bg);color:var(--accent);border:1px solid var(--c-blue-bd)}
+  .pi-act .exec-one:hover{background:var(--accent);color:var(--on-accent);border-color:var(--accent)}
   /* 联程组：把"自行中转的两段"当一趟行程看 */
   .combo{background:var(--panel2);border:1px solid var(--line);border-radius:10px;padding:10px 12px;margin:0 0 8px}
   .combo.win{border-color:var(--good)}
@@ -552,7 +573,7 @@
     </div>
     <div id="intakeProposal"></div>
     <div class="shead" style="margin-top:26px"><span class="bar"></span>📥 备忘收件箱<span class="cnt" id="memoCnt"></span>
-      <button id="procBtn" class="proc-btn">🧠 用 Opus 处置</button></div>
+      <button id="procBtn" class="proc-btn">🧠 生成处置计划</button></div>
     <div id="procPanel"></div>
     <div id="memoList"></div>
   </div>
@@ -612,6 +633,7 @@
 
 <!-- 高危操作的二次确认（独立 mask，避免和监测项表单抢同一个容器） -->
 <div class="mask" id="totpMask"><div class="modal" id="totpModal"></div></div>
+<div class="mask" id="confirmMask"><div class="modal" id="confirmModal" style="width:440px"></div></div>
 
 <div class="toast" id="toast"></div>
 
@@ -826,6 +848,24 @@ function askTotp(label,why){
     mask.onclick=e=>{if(e.target===mask)done(null);};
   });
 }
+/* 页面内确认框（替代系统 confirm/alert）：返回 Promise<bool>。 */
+function confirmDialog(message,{title="确认操作",okText="确认",danger=false}={}){
+  return new Promise(res=>{
+    const mask=$("#confirmMask");
+    $("#confirmModal").innerHTML=`<h3>${esc(title)}</h3>
+      <div class="cf-msg">${esc(message)}</div>
+      <div class="actions"><button class="${danger?'solid-danger':'primary'}" id="cfOk">${esc(okText)}</button>
+        <button id="cfNo">取消</button></div>`;
+    mask.classList.add("show");
+    const done=v=>{mask.classList.remove("show");document.removeEventListener("keydown",onKey);res(v);};
+    const onKey=e=>{if(e.key==="Escape")done(false);else if(e.key==="Enter")done(true);};
+    document.addEventListener("keydown",onKey);
+    $("#cfOk").onclick=()=>done(true);
+    $("#cfNo").onclick=()=>done(false);
+    mask.onclick=e=>{if(e.target===mask)done(false);};
+    $("#cfOk").focus();
+  });
+}
 if("serviceWorker" in navigator){window.addEventListener("load",()=>navigator.serviceWorker.register("/sw.js").catch(()=>{}));}
 
 /* ---- Tab 切换 ---- */
@@ -1036,7 +1076,7 @@ async function review(id,status){
   catch(e){toast("失败："+e.message,false);}}
 async function delMember(id){
   const m=CREW.find(x=>x.id===id)||{};
-  if(!confirm("确认删除该成员及其航段？"))return;
+  if(!await confirmDialog("确认删除该成员及其航段？此操作不可撤销。",{title:"删除成员",okText:"删除",danger:true}))return;
   try{await gapi(`/api/members/${id}`,{method:"DELETE"},`删除成员 ${m.name||"#"+id}`);
     curMember=null;$("#crewDetail").innerHTML=`<div class="empty">已删除</div>`;await loadCrew();}
   catch(e){toast("失败："+e.message,false);}}
@@ -1067,12 +1107,12 @@ async function totpPanel(mid){
     try{const r=await gapi(`/api/totp/${mid}/setup`,{method:"POST"},`换绑 ${m.name||""} 的 TOTP`);
       showBind(mid,r);}catch(e){toast("失败："+e.message,false);}};
   const bm=$("#tbMail");if(bm)bm.onclick=async()=>{
-    if(!confirm("将生成新密钥并邮寄到该成员登记邮箱，旧的立即失效。继续？"))return;
+    if(!await confirmDialog("将生成新密钥并邮寄到该成员登记邮箱，旧的立即失效。继续？",{title:"换绑并邮寄",okText:"继续"}))return;
     try{const r=await gapi(`/api/totp/${mid}/mail`,{method:"POST"},`邮寄 ${m.name||""} 的 TOTP 绑定`);
       toast(r.ok?`已寄到 ${r.to}`:"发信失败："+r.info,!!r.ok);totpPanel(mid);}
     catch(e){toast("失败："+e.message,false);}};
   const bo=$("#tbOff");if(bo)bo.onclick=async()=>{
-    if(!confirm("解绑后此人不再是闸门钥匙持有者。继续？"))return;
+    if(!await confirmDialog("解绑后此人不再是闸门钥匙持有者。继续？",{title:"解绑 TOTP",okText:"解绑",danger:true}))return;
     try{await gapi(`/api/totp/${mid}`,{method:"DELETE"},`解绑 ${m.name||""} 的 TOTP`);
       toast("已解绑");totpPanel(mid);}catch(e){toast("失败："+e.message,false);}};
 }
@@ -1290,7 +1330,7 @@ async function grantForm(){
     ${cur}`;
   $("#billMain").querySelectorAll("[data-rv]").forEach(b=>b.onclick=async()=>{
     const id=+b.dataset.rv,nm=(CREW.find(x=>x.id===id)||{}).name||"#"+id;
-    if(!confirm(`撤销 ${nm} 的账单授权？他的口令将立即打不开线上账单。`))return;
+    if(!await confirmDialog(`撤销 ${nm} 的账单授权？他的口令将立即打不开线上账单。`,{title:"撤销账单授权",okText:"撤销",danger:true}))return;
     try{const r=await gapi(`/api/ledger/grant/${id}`,{method:"DELETE"},`撤销 ${nm} 的账单授权`);
       toast("已撤销｜线上同步："+(r.synced||"—"));grantForm();}
     catch(e){toast("失败："+e.message,false);}});
@@ -1708,23 +1748,18 @@ function loadIntake(){
   const b=$("#intakeParseBtn");if(b)b.onclick=intakeParse;
   const c=$("#intakeClearBtn");if(c)c.onclick=()=>{$("#intakeText").value="";$("#intakeProposal").innerHTML="";_proposal=null;};
   const ta=$("#intakeText");if(ta)ta.onkeydown=e=>{if((e.metaKey||e.ctrlKey)&&e.key==="Enter")intakeParse();};
-  const pb=$("#procBtn");if(pb)pb.onclick=intakeProcess;
+  const pb=$("#procBtn");if(pb)pb.onclick=planStart;
   renderMemos(); pollProcess();
 }
-/* 🧠 用强模型(Opus·max)后台处置收件箱：只改文件、外层确定性提交，前端轮询状态 */
-let _procPoll=null;
-function renderProc(s){
-  const el=$("#procPanel"),btn=$("#procBtn");if(!el)return;
-  if(s&&s.running){if(btn){btn.disabled=true;btn.textContent="🧠 处置中…";}
-    el.innerHTML=`<div class="proc-run"><span class="proc-spin"></span>Opus 正在处置备忘…（可能几分钟，别关页面）</div>`;return;}
-  if(btn){btn.disabled=false;btn.textContent="🧠 用 Opus 处置";}
-  const r=s&&s.result;if(!r){el.innerHTML="";return;}
-  const post=r.post||{};
-  const badge=r.ok?(post.committed?`已提交 ${esc(post.commit||'')}${post.itinerary_changed?' · 已发布线上':''}`:"未改动文件"):"未完成";
-  el.innerHTML=`<div class="proc-res ${r.ok?'ok':'err'}">
-    <div class="proc-h">🧠 处置结果<span class="proc-meta">${esc(r.model||'')} · ${esc((r.finished_at||'').slice(5,16).replace('T',' '))} · ${badge}</span></div>
-    <pre class="proc-sum">${esc(r.summary||'')}</pre>
-    <div class="proc-note">✅ 已处置的备忘请自行勾掉；未处置项按说明补齐信息后可再录入或改从 Claude Code 处理。</div></div>`;
+/* 🧠 收件箱处置：阶段一生成处置计划(只读)，阶段二逐条确认后执行(改文件)。前端轮询状态 */
+let _procPoll=null,_plan=null;
+function resetProcBtn(){const pb=$("#procBtn");if(pb){pb.disabled=false;pb.textContent="🧠 生成处置计划";}}
+async function planStart(){
+  const pb=$("#procBtn");if(pb){pb.disabled=true;pb.textContent="🧠 规划中…";}
+  try{const r=await api("/api/intake/plan",{method:"POST"});
+    if(r&&r.ok){toast(r.message||"开始生成计划");pollProcess();}
+    else{toast((r&&r.message)||"启动失败",false);resetProcBtn();}
+  }catch(e){toast("启动失败："+(e.message||e),false);resetProcBtn();}
 }
 async function pollProcess(){
   let s;try{s=await api("/api/intake/process/status");}catch(e){return;}
@@ -1732,15 +1767,68 @@ async function pollProcess(){
   clearTimeout(_procPoll);
   if(s&&s.running)_procPoll=setTimeout(pollProcess,4000);
 }
-async function intakeProcess(){
-  const ms=(await api("/api/intake/memos"))||[];const n=ms.filter(m=>!m.done).length;
-  if(!n){toast("没有待处置的备忘",false);return;}
-  if(!confirm(`用 Opus 处置 ${n} 条待办备忘？\n会调用强模型、可能几分钟、消耗较多额度；期间它会按需改行程等文件并自动提交。`))return;
-  const btn=$("#procBtn");if(btn){btn.disabled=true;btn.textContent="🧠 启动中…";}
-  try{const r=await api("/api/intake/process",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({})});
-    if(r&&r.ok){toast(r.message||"已开始处置");pollProcess();}
-    else{toast((r&&r.message)||"启动失败",false);if(btn){btn.disabled=false;btn.textContent="🧠 用 Opus 处置";}}
-  }catch(e){toast("启动失败："+(e.message||e),false);if(btn){btn.disabled=false;btn.textContent="🧠 用 Opus 处置";}}
+function renderProc(s){
+  const el=$("#procPanel"),pb=$("#procBtn");if(!el)return;
+  if(s&&s.running){if(pb){pb.disabled=true;pb.textContent=s.phase==="execute"?"🧠 执行中…":"🧠 规划中…";}
+    el.innerHTML=`<div class="proc-run"><span class="proc-spin"></span>${s.phase==="execute"?"Opus 正在执行处置、按计划改文件…":"Opus 正在生成处置计划（只读、不改东西）…"}（可能几分钟，别关页面）</div>`;return;}
+  resetProcBtn();
+  const r=s&&s.result;if(!r){el.innerHTML="";return;}
+  if(r.phase==="execute"||r.summary!==undefined)renderExecResult(r);
+  else renderPlan(r);
+}
+function planItemHtml(p){
+  return `<div class="plan-item ${p.doable?'':'no'}">
+    <div class="pi-head"><span class="pi-badge ${p.doable?'ok':'no'}">${p.doable?'可执行':'需人工'}</span>
+      <span class="pi-text">${esc(p.text||'')}</span></div>
+    <div class="pi-action">${esc(p.doable?(p.action||'（未给出计划）'):(p.reason||'（未给出原因）'))}</div>
+    ${p.files&&p.files.length?`<div class="pi-files">📄 ${p.files.map(f=>esc(f)).join(' · ')}</div>`:""}
+    ${p.doable?`<div class="pi-act"><button class="exec-one" data-ts="${esc(p.ts||'')}">✅ 执行此条</button></div>`:""}
+  </div>`;
+}
+function wirePlan(el){
+  el.querySelectorAll(".exec-one").forEach(b=>b.onclick=()=>execItems([b.dataset.ts]));
+  const ea=el.querySelector("#execAllBtn");if(ea)ea.onclick=()=>execItems((_plan||[]).filter(p=>p.doable).map(p=>p.ts));
+}
+function planPanelHtml(plan,model,extraTop){
+  const doableN=plan.filter(p=>p.doable).length;
+  return `<div class="plan-wrap">
+    ${extraTop||""}
+    <div class="plan-top"><b>处置计划</b><span class="proc-meta">${esc(model||'')} · 可执行 ${doableN}/${plan.length}</span>
+      ${doableN?`<button class="primary" id="execAllBtn">全部执行(${doableN})</button>`:""}</div>
+    ${plan.map(planItemHtml).join("")}</div>`;
+}
+function renderPlan(r){
+  const el=$("#procPanel");
+  if(!r.ok){el.innerHTML=`<div class="proc-res err"><div class="proc-h">计划生成失败</div><div class="proc-note">${esc(r.note||"")}</div></div>`;return;}
+  _plan=(r.plan||[]).filter(p=>p.ts);
+  if(!_plan.length){el.innerHTML=`<div class="empty" style="margin:14px 0">${esc(r.note||"没有待处置的备忘")}</div>`;return;}
+  el.innerHTML=planPanelHtml(_plan,r.model);
+  wirePlan(el);
+}
+async function execItems(tsList){
+  tsList=(tsList||[]).filter(Boolean);if(!tsList.length)return;
+  const one=tsList.length===1?(_plan||[]).find(p=>p.ts===tsList[0]):null;
+  const msg=one?`执行这一条处置？\n\n备忘：${one.text}\n计划：${one.action}\n\n会按计划改文件并自动提交，可能几分钟。`
+    :`执行选中的 ${tsList.length} 条处置？\n会按各自计划改文件并自动提交，可能几分钟、消耗较多 Opus 额度。`;
+  if(!await confirmDialog(msg,{title:"确认执行处置",okText:"执行"}))return;
+  try{const r=await api("/api/intake/execute",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({ts:tsList})});
+    if(r&&r.ok){toast(r.message||"开始执行");pollProcess();}
+    else{toast((r&&r.message)||"启动失败",false);}
+  }catch(e){toast("启动失败："+(e.message||e),false);}
+}
+function renderExecResult(r){
+  const el=$("#procPanel");
+  const post=r.post||{};
+  const badge=r.ok?(post.committed?`已提交 ${esc(post.commit||'')}${post.itinerary_changed?' · 已发布线上':''}`:"未改动文件"):"未完成";
+  const done=new Set(r.done_ts||[]);_plan=(_plan||[]).filter(p=>!done.has(p.ts));
+  const remain=_plan.filter(p=>p.doable);
+  const box=`<div class="proc-res ${r.ok?'ok':'err'}">
+    <div class="proc-h">🧠 执行结果<span class="proc-meta">${esc(r.model||'')} · ${esc((r.finished_at||'').slice(5,16).replace('T',' '))} · ${badge}</span></div>
+    <pre class="proc-sum">${esc(r.summary||'')}</pre>
+    <div class="proc-note">已处置的备忘已自动勾掉。${remain.length?`下方是计划里还没执行的 ${remain.length} 条，可继续逐条执行。`:'点上方「生成处置计划」可重新规划剩余备忘。'}</div></div>`;
+  el.innerHTML=box+(remain.length?planPanelHtml(_plan,r.model):"");
+  if(remain.length)wirePlan(el);
+  renderMemos();
 }
 async function intakeParse(){
   const t=($("#intakeText").value||"").trim();if(!t){toast("先输入点内容",false);return;}
@@ -1994,7 +2082,7 @@ async function saveForm(){const name=$("#f_name").value.trim();if(!name){toast("
   try{if(editingId)await api(`/api/watches/${editingId}`,{method:"PUT",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)});
     else await api(`/api/watches`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)});
     closeForm();toast("已保存");await refresh();if(editingId)await selectWatch(editingId);}catch(e){toast("保存失败："+e.message,false);}}
-async function delWatch(id){if(!confirm("确认删除该监测项及其历史？"))return;await api(`/api/watches/${id}`,{method:"DELETE"});
+async function delWatch(id){if(!await confirmDialog("确认删除该监测项及其历史？此操作不可撤销。",{title:"删除监测项",okText:"删除",danger:true}))return;await api(`/api/watches/${id}`,{method:"DELETE"});
   selectedId=null;closeDetail();$("#detail").innerHTML=`<div class="empty">已删除</div>`;toast("已删除");await refresh();}
 
 (async()=>{ if(PREVIEW){await loadSnapshot();if(!(SNAP||{})._fromCache)checkStale();} switchTab("today"); skeleton(); await refresh();
