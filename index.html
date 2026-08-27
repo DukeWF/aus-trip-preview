@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="zh-CN">
 <head>
-<script>window.PREVIEW=true;window.BUILD="20260827230906"</script>
+<script>window.PREVIEW=true;window.BUILD="20260827232714"</script>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
 <title>2026·10 澳洲行 · 行程与价格监测</title>
@@ -188,6 +188,17 @@
   .memo-ts{color:var(--muted);font-size:11px;flex:none;font-variant-numeric:tabular-nums}
   .memo-del{color:var(--muted);cursor:pointer;flex:none;font-size:13px;padding:0 2px}
   .memo-del:hover{color:var(--bad)}
+  .proc-btn{margin-left:auto;font-size:12.5px;padding:5px 12px;background:var(--accent-bg);color:var(--accent);border:1px solid var(--c-blue-bd)}
+  .proc-btn:hover:not(:disabled){background:var(--accent);color:var(--on-accent);border-color:var(--accent)}
+  .proc-btn:disabled{opacity:.6;cursor:default}
+  .proc-run{display:flex;align-items:center;gap:10px;background:var(--accent-bg);border:1px solid var(--c-blue-bd);border-radius:12px;padding:11px 14px;margin:12px 0;font-size:13px;color:var(--accent)}
+  .proc-spin{width:15px;height:15px;border:2px solid var(--c-blue-bd);border-top-color:var(--accent);border-radius:50%;animation:spin .8s linear infinite;flex:none}
+  .proc-res{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:12px 15px;margin:12px 0;box-shadow:var(--shadow-1)}
+  .proc-res.ok{border-left:3px solid var(--good)}.proc-res.err{border-left:3px solid var(--bad)}
+  .proc-h{font-weight:600;font-size:14px;display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:8px}
+  .proc-meta{color:var(--muted);font-size:11.5px;font-weight:400}
+  .proc-sum{white-space:pre-wrap;word-break:break-word;font-size:12.5px;line-height:1.7;background:var(--panel2);border-radius:9px;padding:10px 12px;margin:0;font-family:inherit}
+  .proc-note{color:var(--muted);font-size:12px;margin-top:9px;line-height:1.6}
   /* 联程组：把"自行中转的两段"当一趟行程看 */
   .combo{background:var(--panel2);border:1px solid var(--line);border-radius:10px;padding:10px 12px;margin:0 0 8px}
   .combo.win{border-color:var(--good)}
@@ -540,7 +551,9 @@
       <button id="intakeClearBtn">清空</button>
     </div>
     <div id="intakeProposal"></div>
-    <div class="shead" style="margin-top:26px"><span class="bar"></span>📥 备忘收件箱<span class="cnt" id="memoCnt"></span></div>
+    <div class="shead" style="margin-top:26px"><span class="bar"></span>📥 备忘收件箱<span class="cnt" id="memoCnt"></span>
+      <button id="procBtn" class="proc-btn">🧠 用 Opus 处置</button></div>
+    <div id="procPanel"></div>
     <div id="memoList"></div>
   </div>
 </div>
@@ -1695,7 +1708,39 @@ function loadIntake(){
   const b=$("#intakeParseBtn");if(b)b.onclick=intakeParse;
   const c=$("#intakeClearBtn");if(c)c.onclick=()=>{$("#intakeText").value="";$("#intakeProposal").innerHTML="";_proposal=null;};
   const ta=$("#intakeText");if(ta)ta.onkeydown=e=>{if((e.metaKey||e.ctrlKey)&&e.key==="Enter")intakeParse();};
-  renderMemos();
+  const pb=$("#procBtn");if(pb)pb.onclick=intakeProcess;
+  renderMemos(); pollProcess();
+}
+/* 🧠 用强模型(Opus·max)后台处置收件箱：只改文件、外层确定性提交，前端轮询状态 */
+let _procPoll=null;
+function renderProc(s){
+  const el=$("#procPanel"),btn=$("#procBtn");if(!el)return;
+  if(s&&s.running){if(btn){btn.disabled=true;btn.textContent="🧠 处置中…";}
+    el.innerHTML=`<div class="proc-run"><span class="proc-spin"></span>Opus 正在处置备忘…（可能几分钟，别关页面）</div>`;return;}
+  if(btn){btn.disabled=false;btn.textContent="🧠 用 Opus 处置";}
+  const r=s&&s.result;if(!r){el.innerHTML="";return;}
+  const post=r.post||{};
+  const badge=r.ok?(post.committed?`已提交 ${esc(post.commit||'')}${post.itinerary_changed?' · 已发布线上':''}`:"未改动文件"):"未完成";
+  el.innerHTML=`<div class="proc-res ${r.ok?'ok':'err'}">
+    <div class="proc-h">🧠 处置结果<span class="proc-meta">${esc(r.model||'')} · ${esc((r.finished_at||'').slice(5,16).replace('T',' '))} · ${badge}</span></div>
+    <pre class="proc-sum">${esc(r.summary||'')}</pre>
+    <div class="proc-note">✅ 已处置的备忘请自行勾掉；未处置项按说明补齐信息后可再录入或改从 Claude Code 处理。</div></div>`;
+}
+async function pollProcess(){
+  let s;try{s=await api("/api/intake/process/status");}catch(e){return;}
+  renderProc(s);
+  clearTimeout(_procPoll);
+  if(s&&s.running)_procPoll=setTimeout(pollProcess,4000);
+}
+async function intakeProcess(){
+  const ms=(await api("/api/intake/memos"))||[];const n=ms.filter(m=>!m.done).length;
+  if(!n){toast("没有待处置的备忘",false);return;}
+  if(!confirm(`用 Opus 处置 ${n} 条待办备忘？\n会调用强模型、可能几分钟、消耗较多额度；期间它会按需改行程等文件并自动提交。`))return;
+  const btn=$("#procBtn");if(btn){btn.disabled=true;btn.textContent="🧠 启动中…";}
+  try{const r=await api("/api/intake/process",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({})});
+    if(r&&r.ok){toast(r.message||"已开始处置");pollProcess();}
+    else{toast((r&&r.message)||"启动失败",false);if(btn){btn.disabled=false;btn.textContent="🧠 用 Opus 处置";}}
+  }catch(e){toast("启动失败："+(e.message||e),false);if(btn){btn.disabled=false;btn.textContent="🧠 用 Opus 处置";}}
 }
 async function intakeParse(){
   const t=($("#intakeText").value||"").trim();if(!t){toast("先输入点内容",false);return;}
