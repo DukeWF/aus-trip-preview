@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="zh-CN">
 <head>
-<script>window.PREVIEW=true;window.BUILD="20260830190719"</script>
+<script>window.PREVIEW=true;window.BUILD="20260830191651"</script>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
 <title>2026·10 澳洲行 · 行程与价格监测</title>
@@ -197,6 +197,23 @@
   .proc-btn:disabled{opacity:.6;cursor:default}
   .proc-run{display:flex;align-items:center;gap:10px;background:var(--accent-bg);border:1px solid var(--c-blue-bd);border-radius:12px;padding:11px 14px;margin:12px 0;font-size:13px;color:var(--accent)}
   .proc-spin{width:15px;height:15px;border:2px solid var(--c-blue-bd);border-top-color:var(--accent);border-radius:50%;animation:spin .8s linear infinite;flex:none}
+  /* 实时进度面板：跑几分钟的强模型任务，必须看得见「现在到哪一步」 */
+  .pr-wrap{background:var(--panel);border:1px solid var(--c-blue-bd);border-left:3px solid var(--accent);border-radius:12px;padding:12px 14px;margin:12px 0;box-shadow:var(--shadow-1)}
+  .pr-top{display:flex;align-items:center;gap:9px;font-size:13.5px;font-weight:600;color:var(--accent)}
+  .pr-time{margin-left:auto;font-variant-numeric:tabular-nums;font-size:12px;font-weight:400;color:var(--muted)}
+  .pr-bar{height:4px;border-radius:4px;background:var(--line-soft);overflow:hidden;margin:9px 0 10px}
+  .pr-bar>i{display:block;height:100%;background:var(--accent);border-radius:4px;transition:width .6s linear}
+  .pr-step{font-size:13px;color:var(--fg);word-break:break-word;line-height:1.6}
+  .pr-tags{display:flex;flex-wrap:wrap;gap:6px;margin-top:9px}
+  .pr-tag{font-size:11.5px;padding:2px 8px;border-radius:999px;background:var(--panel2);border:1px solid var(--line);color:var(--fg2)}
+  .pr-files{font-size:12px;color:var(--fg2);margin-top:8px;word-break:break-all}
+  .pr-log{margin-top:10px}
+  .pr-log>summary{cursor:pointer;font-size:12px;color:var(--muted);user-select:none}
+  .pr-lines{max-height:190px;overflow:auto;background:var(--panel2);border-radius:9px;padding:8px 10px;margin-top:7px;font-size:12px;line-height:1.75;word-break:break-word}
+  .pr-lines div{border-bottom:1px dashed var(--line-soft);padding:1px 0}
+  .pr-lines div:last-child{border-bottom:0}
+  .pr-idle{font-size:11.5px;color:var(--warn);margin-top:8px}
+  .pr-tip{font-size:11.5px;color:var(--muted);margin-top:8px}
   .proc-res{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:12px 15px;margin:12px 0;box-shadow:var(--shadow-1)}
   .proc-res.ok{border-left:3px solid var(--good)}.proc-res.err{border-left:3px solid var(--bad)}
   .proc-h{font-weight:600;font-size:14px;display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:8px}
@@ -1773,12 +1790,48 @@ async function pollProcess(){
   let s;try{s=await api("/api/intake/process/status");}catch(e){return;}
   renderProc(s);
   clearTimeout(_procPoll);
-  if(s&&s.running)_procPoll=setTimeout(pollProcess,4000);
+  if(s&&s.running)_procPoll=setTimeout(pollProcess,2000);
+}
+/* 进度面板：服务端 2s 一刷，本地 1s 走表——不然计时器会一跳一跳的 */
+let _procTick=null,_procSnap=null,_procLogOpen=false;
+const _mmss=s=>`${Math.floor(s/60)}:${String(Math.floor(s%60)).padStart(2,"0")}`;
+function _ago(iso){const t=Date.parse((iso||"").replace(" ","T"));return isNaN(t)?null:(Date.now()-t)/1000;}
+function progressHtml(s){
+  const pg=s.progress||{},exec=s.phase==="execute";
+  const el=_ago(s.started_at)||0,lim=s.timeout_s||1500;
+  const tags=Object.entries(pg.tools||{}).map(([k,v])=>`<span class="pr-tag">${esc(k)} ×${v}</span>`).join("");
+  const idle=_ago(pg.last_event_at);
+  return `<div class="pr-wrap">
+    <div class="pr-top"><span class="proc-spin"></span>
+      <span>${exec?"Opus 正在执行处置（会改文件）":"Opus 正在生成处置计划（只读）"}</span>
+      <span class="pr-time" data-start="${esc(s.started_at||"")}" data-lim="${lim}">${_mmss(el)} / ${_mmss(lim)}</span></div>
+    <div class="pr-bar"><i style="width:${Math.min(100,el/lim*100).toFixed(1)}%"></i></div>
+    <div class="pr-step">${esc(pg.step||"启动中…")}</div>
+    ${tags?`<div class="pr-tags"><span class="pr-tag">第 ${pg.turns||0} 步</span>${tags}</div>`:""}
+    ${(pg.files||[]).length?`<div class="pr-files">📄 已改：${(pg.files||[]).map(esc).join(" · ")}</div>`:""}
+    ${(pg.lines||[]).length?`<details class="pr-log"${_procLogOpen?" open":""}><summary>过程日志（${pg.lines.length} 条）</summary>
+      <div class="pr-lines">${pg.lines.map(l=>`<div>${esc(l)}</div>`).join("")}</div></details>`:""}
+    ${idle!=null&&idle>90?`<div class="pr-idle">已 ${Math.round(idle)} 秒无新事件——多为在思考或等联网返回，超时上限 ${_mmss(lim)} 会自动收。</div>`
+      :`<div class="pr-tip">可以关页面/切设备，任务在本机服务上跑，回来还能看到进度。</div>`}
+  </div>`;
 }
 function renderProc(s){
   const el=$("#procPanel"),pb=$("#procBtn");if(!el)return;
-  if(s&&s.running){if(pb){pb.disabled=true;pb.textContent=s.phase==="execute"?"🧠 执行中…":"🧠 规划中…";}
-    el.innerHTML=`<div class="proc-run"><span class="proc-spin"></span>${s.phase==="execute"?"Opus 正在执行处置、按计划改文件…":"Opus 正在生成处置计划（只读、不改东西）…"}（可能几分钟，别关页面）</div>`;return;}
+  clearInterval(_procTick);_procTick=null;
+  if(s&&s.running){
+    if(pb){pb.disabled=true;pb.textContent=s.phase==="execute"?"🧠 执行中…":"🧠 规划中…";}
+    _procSnap=s;
+    const lg=el.querySelector(".pr-log");if(lg)_procLogOpen=lg.open;   // 保住用户展开状态
+    el.innerHTML=progressHtml(s);
+    const box=el.querySelector(".pr-lines");if(box)box.scrollTop=box.scrollHeight;
+    const d=el.querySelector(".pr-log");if(d)d.ontoggle=()=>{_procLogOpen=d.open;};
+    _procTick=setInterval(()=>{                                        // 只动秒表和进度条
+      const t=el.querySelector(".pr-time"),bar=el.querySelector(".pr-bar>i");if(!t)return;
+      const e=_ago(t.dataset.start)||0,lim=+t.dataset.lim||1500;
+      t.textContent=`${_mmss(e)} / ${_mmss(lim)}`;
+      if(bar)bar.style.width=Math.min(100,e/lim*100).toFixed(1)+"%";
+    },1000);
+    return;}
   resetProcBtn();
   const r=s&&s.result;if(!r){el.innerHTML="";return;}
   if(r.phase==="execute"||r.summary!==undefined)renderExecResult(r);
@@ -1857,10 +1910,18 @@ function renderExecResult(r){
   const badge=r.ok?(post.committed?`已提交 ${esc(post.commit||'')}${post.itinerary_changed?' · 已发布线上':''}`:"未改动文件"):"未完成";
   const done=new Set(r.done_ts||[]);_plan=(_plan||[]).filter(p=>!done.has(p.ts));
   const remain=_plan.filter(canExec);
+  const cost=r.cost_usd!=null?` · $${(+r.cost_usd).toFixed(2)}`:"";
+  const steps=r.turns?` · ${r.turns} 步`:"";
+  const files=(r.files||[]).length?`<div class="pr-files">📄 改动文件：${(r.files||[]).map(esc).join(" · ")}</div>`:"";
+  // 失败时把过程日志尾巴摊开——不然只剩一句报错，连"跑到哪一步断的"都查不到。
+  const tail=(!r.ok&&(r.log_tail||[]).length)
+    ?`<details class="pr-log" open><summary>过程日志（最后 ${r.log_tail.length} 条）</summary>
+       <div class="pr-lines">${r.log_tail.map(l=>`<div>${esc(l)}</div>`).join("")}</div></details>`:"";
   _execBox=`<div class="proc-res ${r.ok?'ok':'err'}">
-    <div class="proc-h">🧠 执行结果<span class="proc-meta">${esc(r.model||'')} · ${esc((r.finished_at||'').slice(5,16).replace('T',' '))} · ${badge}</span></div>
+    <div class="proc-h">🧠 执行结果<span class="proc-meta">${esc(r.model||'')} · ${esc((r.finished_at||'').slice(5,16).replace('T',' '))}${steps}${cost} · ${badge}</span></div>
     <pre class="proc-sum">${esc(r.summary||'')}</pre>
-    <div class="proc-note">已处置的备忘已自动勾掉。${remain.length?`下方是计划里还没执行的 ${remain.length} 条，可继续编辑/执行。`:'点上方「生成处置计划」可重新规划剩余备忘。'}</div></div>`;
+    ${files}${tail}
+    <div class="proc-note">${r.ok?"已处置的备忘已自动勾掉。":"⚠️ 本次未完成，相关备忘<b>仍保留为未处置</b>，可直接重试。"}${remain.length?`下方是计划里还没执行的 ${remain.length} 条，可继续编辑/执行。`:'点上方「生成处置计划」可重新规划剩余备忘。'}</div></div>`;
   rerenderPlan();
   renderMemos();
 }
