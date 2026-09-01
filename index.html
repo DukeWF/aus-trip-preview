@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="zh-CN">
 <head>
-<script>window.PREVIEW=true;window.BUILD="20260902005535"</script>
+<script>window.PREVIEW=true;window.BUILD="20260902010630"</script>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
 <title>2026·10 澳洲行 · 行程与价格监测</title>
@@ -276,6 +276,20 @@
   .ug-bar>span{font-size:9px;color:var(--muted);margin-top:3px;white-space:nowrap;transform:scale(.92)}
   .ug-limit{font-size:12px;color:var(--warn);background:var(--warn-bg);border:1px solid var(--warn-bd);border-radius:9px;padding:7px 10px;margin-top:8px;line-height:1.6}
   .ug-note{font-size:11px;color:var(--muted);margin-top:12px;line-height:1.6}
+  .ug-sum{margin-left:10px;display:inline-flex;gap:6px;flex-wrap:wrap;vertical-align:middle}
+  .ug-chip{font-size:11px;padding:1px 8px;border-radius:999px;border:1px solid var(--line);background:var(--panel2);color:var(--fg2)}
+  .ug-chip.ok{background:var(--good-bg);color:var(--good);border-color:var(--good-bd)}
+  .ug-chip.warn{background:var(--warn-bg);color:var(--warn);border-color:var(--warn-bd)}
+  .ug-chip.bad{background:var(--bad-bg);color:var(--bad);border-color:var(--bad-bd)}
+  .ug-off{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:10px;margin:12px 0 4px}
+  .ug-lim{background:var(--panel2);border-radius:10px;padding:10px 12px}
+  .ug-lim-h{display:flex;align-items:center;gap:8px;font-size:13px}
+  .ug-lim-p{margin-left:auto;font-size:17px;font-weight:600;font-variant-numeric:tabular-nums}
+  .ug-lim-bar{height:6px;border-radius:6px;background:var(--line-soft);overflow:hidden;margin:7px 0 5px}
+  .ug-lim-bar>i{display:block;height:100%;border-radius:6px;background:var(--good)}
+  .ug-lim.warn .ug-lim-bar>i{background:var(--warn)}.ug-lim.warn .ug-lim-p{color:var(--warn)}
+  .ug-lim.bad .ug-lim-bar>i{background:var(--bad)}.ug-lim.bad .ug-lim-p{color:var(--bad)}
+  .ug-off-err{font-size:12px;color:var(--warn);background:var(--warn-bg);border:1px solid var(--warn-bd);border-radius:9px;padding:7px 10px;margin:10px 0 4px}
   .pi-editbar button{font-size:12.5px;padding:5px 12px}
   /* 联程组：把"自行中转的两段"当一趟行程看 */
   .combo{background:var(--panel2);border:1px solid var(--line);border-radius:10px;padding:10px 12px;margin:0 0 8px}
@@ -634,7 +648,7 @@
     <div id="mdlBar" class="mdl-bar"></div>
     <div id="jobPanel"></div>
     <div id="memoList"></div>
-    <details class="usage-box" id="usageBox"><summary>📊 Claude 用量（本机推算）</summary>
+    <details class="usage-box" id="usageBox"><summary>📊 Claude 用量<span class="ug-sum" id="ugSum"></span></summary>
       <div id="usageBody"></div></details>
   </div>
 </div>
@@ -1809,7 +1823,7 @@ function loadIntake(){
   const c=$("#intakeClearBtn");if(c)c.onclick=()=>{$("#intakeText").value="";$("#intakeProposal").innerHTML="";_proposal=null;};
   const ta=$("#intakeText");if(ta)ta.onkeydown=e=>{if((e.metaKey||e.ctrlKey)&&e.key==="Enter")intakeParse();};
   const pb=$("#procBtn");if(pb)pb.onclick=()=>planStart(null);
-  const ub=$("#usageBox");if(ub&&!ub._wired){ub._wired=1;ub.ontoggle=()=>{if(ub.open)loadUsage();};}
+  const ub=$("#usageBox");if(ub&&!ub._wired){ub._wired=1;ub.ontoggle=()=>{if(ub.open)loadUsage();};ugPeek();}
   renderMemos(); pollJobs();
 }
 /* 🧠 收件箱处置：规划(只读，可并行、可单条) → 方案落库、可编辑 → 执行(改文件，全局串行排队)。
@@ -2052,6 +2066,23 @@ async function intakeApply(){
 
 /* ---------- 📊 用量 ---------- */
 const _kt=n=>n>=1e6?(n/1e6).toFixed(1)+"M":(n>=1e3?Math.round(n/1e3)+"k":String(n||0));
+/* 官方口径（/api/oauth/usage，与 TUI 的 /usage 同源）——百分比以它为准，本机推算只做补充 */
+function officialHtml(o,ev){
+  if(!o||!o.ok){
+    const fb=ev?`<div class="mdl-hint">兜底：上次任务接到的限额状态 ${esc(ev.status||"")}${ev.type?"（"+esc(ev.type)+"）":""}${ev.resets_at?" · 重置 "+esc(ev.resets_at.slice(5,16).replace("T"," ")):""}，记于 ${esc((ev.at||"").slice(5,16).replace("T"," "))}</div>`:"";
+    return `<div class="ug-off-err">官方额度读不到：${esc((o&&o.note)||"未知原因")}</div>${fb}`;}
+  const rows=(o.windows||[]).map(w=>{
+    const p=Math.max(0,Math.min(100,+w.percent||0));
+    const lvl=p>=90?"bad":(p>=70?"warn":"ok");
+    const rs=w.resets_at?`${esc(w.resets_at.slice(5,16).replace("T"," "))} 重置`:"";
+    return `<div class="ug-lim ${lvl}">
+      <div class="ug-lim-h"><b>${esc(w.label||w.kind||"")}</b>${w.active?'<span class="pi-tag-edit">当前吃紧</span>':""}
+        <span class="ug-lim-p">${p}%</span></div>
+      <div class="ug-lim-bar"><i style="width:${p}%"></i></div>
+      <div class="mdl-hint">${rs}</div></div>`;}).join("");
+  return `<div class="ug-off">${rows||'<div class="mdl-hint">接口没返回窗口数据</div>'}</div>
+    <div class="mdl-hint" style="margin-top:6px">官方口径（与 <code>/usage</code> 同源）· 取于 ${esc((o.at||"").slice(5,16).replace("T"," "))}${o.extra_usage_on?" · 已开启额外用量":""}</div>`;
+}
 function usageHtml(u){
   const box=(t,d)=>`<div class="ug-card"><div class="ug-t">${t}</div>
     <div class="ug-n">${_kt(d.total)}</div>
@@ -2064,7 +2095,9 @@ function usageHtml(u){
   const rs=(u.runs||[]).slice(0,6).map(r=>`<div class="ug-row"><span>${esc((r.at||"").slice(5,16).replace("T"," "))} ${r.phase==="plan"?"规划":"执行"}×${r.n||1}</span>
       <b>${r.cost_usd!=null?"$"+(+r.cost_usd).toFixed(3):"—"}</b>
       <span class="mdl-hint">${esc(r.model||"")}/${esc(r.effort||"")} ${r.ok?"✅":"❌"}</span></div>`).join("");
-  return `<div class="ug-cards">${box("最近 5 小时",u.window5h)}${box("今天",u.today)}${box("近 7 天",u.week)}</div>
+  return `${officialHtml(u.official,u.rate_limit_event)}
+    <div class="ug-h">本机推算的 token 量（官方接口不给这个粒度）</div>
+    <div class="ug-cards">${box("最近 5 小时",u.window5h)}${box("今天",u.today)}${box("近 7 天",u.week)}</div>
     ${u.limit_hits&&u.limit_hits.length?`<div class="ug-limit">⚠️ 记录到的额度提示：${u.limit_hits.map(esc).join("；")}</div>`:""}
     <div class="ug-h">近 14 天 token</div><div class="ug-bars">${bars}</div>
     <div class="ug-h">近 7 天按模型</div>${bym||'<div class="mdl-hint">无数据</div>'}
@@ -2075,9 +2108,20 @@ function usageHtml(u){
 async function loadUsage(){
   const el=$("#usageBody");if(!el)return;
   el.innerHTML=`<div class="mdl-hint" style="padding:8px 0">统计中…</div>`;
-  try{const u=await api("/api/usage");el.innerHTML=usageHtml(u);}
+  try{const u=await api("/api/usage");el.innerHTML=usageHtml(u);ugSummary(u);
+    const rb=$("#ugRefresh");if(rb)rb.onclick=()=>loadUsage();}
   catch(e){el.innerHTML=`<div class="ug-note">读取失败：${esc(e.message||String(e))}</div>`;}
 }
+/* 标题栏摘要：不展开也能看到"还剩多少" */
+function ugSummary(u){
+  const s=$("#ugSum");if(!s)return;
+  const w=((u.official||{}).windows||[]);
+  if(!w.length){s.textContent="";return;}
+  s.innerHTML=w.map(x=>{const p=+x.percent||0;
+    return `<span class="ug-chip ${p>=90?"bad":(p>=70?"warn":"ok")}">${esc(x.label||"")} ${p}%</span>`;}).join("");
+}
+/* 打开录入页就顺手拉一次官方额度填标题（不扫会话记录，很轻） */
+async function ugPeek(){try{const u=await api("/api/usage");ugSummary(u);}catch(e){}}
 
 let COMBOS=[];
 /* 联程组：监测项是按单段建的，但真实买法常是分段拼出来的（去程就是 上海→西安 + 西安→悉尼
