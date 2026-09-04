@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="zh-CN">
 <head>
-<script>window.PREVIEW=true;window.BUILD="20260904112814"</script>
+<script>window.PREVIEW=true;window.BUILD="20260904142626"</script>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
 <title>2026·10 澳洲行 · 行程与价格监测</title>
@@ -258,6 +258,13 @@
   .pr-wrap.queued{border-left-color:var(--muted);opacity:.9}
   .job-x{margin-left:auto;color:var(--muted);cursor:pointer;font-size:12px;padding:0 3px}
   .job-x:hover{color:var(--bad)}
+  /* 紧跟在 .pr-time 右边：那个已有 margin-left:auto，整组被推到右端 */
+  .pr-cancel{font-size:11.5px;padding:3px 10px;border-radius:999px;
+    background:var(--panel2);border:1px solid var(--line);color:var(--fg2);cursor:pointer;flex:none}
+  .pr-cancel:hover:not(:disabled){border-color:var(--bad);color:var(--bad)}
+  .pr-cancel:disabled{opacity:.55;cursor:default}
+  .pr-wrap.cancelling{border-left-color:var(--bad)}
+  .proc-res.cancel{border-left:3px solid var(--muted)}
   /* 📊 用量 */
   .usage-box{margin:22px 0 6px;border:1px solid var(--line);border-radius:12px;background:var(--panel);padding:10px 13px}
   .usage-box>summary{cursor:pointer;font-size:13px;color:var(--fg2);user-select:none}
@@ -1883,6 +1890,20 @@ async function execItems(items){
   }catch(e){toast("启动失败："+(e.message||e),false);}
 }
 
+async function cancelJob(jid){
+  const j=_JOBS.find(x=>x.id===jid);if(!j)return;
+  const msg=j.phase!=="execute"
+    ?"中止这次规划？\n\n规划是只读的，不会留下任何改动；这条备忘已有的方案保持不变。"
+    :(j.state==="queued"
+      ?"中止这个排队中的执行？\n\n它还没轮到，没有动过任何文件。"
+      :"中止这次执行？\n\n模型可能已经改了几个文件——这些改动会照常提交并标注「未完成」，"
+       +"备忘保持未处置，之后可以改完方案再执行。");
+  if(!await confirmDialog(msg,{title:"确认中止任务",okText:"中止"}))return;
+  try{const r=await api(`/api/intake/jobs/${encodeURIComponent(jid)}/cancel`,{method:"POST"});
+    toast((r&&r.message)||"已发出中止",!!(r&&r.ok));pollJobs();
+  }catch(e){toast("中止失败："+(e.message||e),false);}
+}
+
 /* ---------- 任务面板：并行任务各一张卡 ---------- */
 let _procTick=null,_logOpen={};
 const _mmss=s=>`${Math.floor(s/60)}:${String(Math.floor(s%60)).padStart(2,"0")}`;
@@ -1896,44 +1917,50 @@ function progressHtml(j){
   const pg=j.progress||{},lim=j.timeout_s||1500,el=_ago(j.started_at)||0;
   const tags=Object.entries(pg.tools||{}).map(([k,v])=>`<span class="pr-tag">${esc(k)} ×${v}</span>`).join("");
   const idle=_ago(pg.last_event_at);
-  const queued=j.state==="queued";
-  return `<div class="pr-wrap ${queued?"queued":""}" data-job="${esc(j.id)}">
+  const queued=j.state==="queued",cancelling=!!j.cancel_requested;
+  return `<div class="pr-wrap ${queued?"queued":""} ${cancelling?"cancelling":""}" data-job="${esc(j.id)}">
     <div class="pr-top"><span class="proc-spin"></span>
       <span>${queued?"⏳ 排队中 · ":""}${esc(jobTitle(j))}</span>
       <span class="pr-tag">${esc(j.model||"")}/${esc(j.effort||"")}</span>
-      <span class="pr-time" data-start="${esc(j.started_at||"")}" data-lim="${lim}">${_mmss(el)} / ${_mmss(lim)}</span></div>
+      <span class="pr-time" data-start="${esc(j.started_at||"")}" data-lim="${lim}">${_mmss(el)} / ${_mmss(lim)}</span>
+      <button class="pr-cancel" data-job="${esc(j.id)}"${cancelling?" disabled":""}>${cancelling?"中止中…":"🛑 中止"}</button></div>
     <div class="pr-bar"><i style="width:${Math.min(100,el/lim*100).toFixed(1)}%"></i></div>
     <div class="pr-step">${esc(pg.step||"启动中…")}</div>
     ${tags?`<div class="pr-tags"><span class="pr-tag">第 ${pg.turns||0} 步</span>${tags}</div>`:""}
     ${(pg.files||[]).length?`<div class="pr-files">📄 已改：${(pg.files||[]).map(esc).join(" · ")}</div>`:""}
     ${(pg.lines||[]).length?`<details class="pr-log"${_logOpen[j.id]?" open":""} data-job="${esc(j.id)}"><summary>过程日志（${pg.lines.length} 条）</summary>
       <div class="pr-lines">${pg.lines.map(l=>`<div>${esc(l)}</div>`).join("")}</div></details>`:""}
-    ${queued?`<div class="pr-tip">改文件+提交必须一个一个来，前一个执行结束就自动开始，不用管它。</div>`
+    ${cancelling?`<div class="pr-idle">正在中止……${j.phase==="execute"?"已改的文件会照常提交并标注「未完成」，备忘保持未处置。":"规划是只读的，不会留下改动。"}</div>`
+      :(queued?`<div class="pr-tip">改文件+提交必须一个一个来，前一个执行结束就自动开始，不用管它。</div>`
       :(idle!=null&&idle>90?`<div class="pr-idle">已 ${Math.round(idle)} 秒无新事件——多为在思考或等联网返回，超时上限 ${_mmss(lim)} 会自动收。</div>`
-      :`<div class="pr-tip">可以关页面/切设备，任务在本机服务上跑，回来还能看到进度。</div>`)}
+      :`<div class="pr-tip">可以关页面/切设备，任务在本机服务上跑，回来还能看到进度。</div>`))}
   </div>`;
 }
 function jobResultHtml(j){
   const r=j.result||{};
+  const cls=r.ok?"ok":(r.cancelled?"cancel":"err");
   if(j.phase==="plan"){
     const n=(r.plan||[]).length;
-    return `<div class="proc-res ${r.ok?"ok":"err"}" data-job="${esc(j.id)}">
-      <div class="proc-h">🧠 规划完成<span class="proc-meta">${esc(r.model||"")}/${esc(r.effort||"")} · ${esc((r.finished_at||"").slice(5,16).replace("T"," "))}${r.turns?` · ${r.turns} 步`:""}${r.cost_usd!=null?` · $${(+r.cost_usd).toFixed(2)}`:""}</span>
+    return `<div class="proc-res ${cls}" data-job="${esc(j.id)}">
+      <div class="proc-h">${r.cancelled?"🛑 规划已中止":"🧠 规划完成"}<span class="proc-meta">${esc(r.model||"")}/${esc(r.effort||"")} · ${esc((r.finished_at||"").slice(5,16).replace("T"," "))}${r.turns?` · ${r.turns} 步`:""}${r.cost_usd!=null?` · $${(+r.cost_usd).toFixed(2)}`:""}</span>
         <span class="job-x" data-job="${esc(j.id)}" title="收起">✕</span></div>
       <div class="proc-note">${r.ok?`已为 ${n} 条备忘生成方案，见下方各条——可直接执行，也可改了再执行。`:esc(r.note||"规划失败")}</div></div>`;
   }
   const post=r.post||{};
-  const badge=r.ok?(post.committed?`已提交 ${esc(post.commit||"")}${post.itinerary_changed?" · 已发布线上":""}`:"未改动文件"):"未完成";
+  const badge=r.ok?(post.committed?`已提交 ${esc(post.commit||"")}${post.itinerary_changed?" · 已发布线上":""}`:"未改动文件")
+    :(r.cancelled?"已中止":"未完成");
   const files=(r.files||[]).length?`<div class="pr-files">📄 改动文件：${(r.files||[]).map(esc).join(" · ")}</div>`:"";
   const tail=(!r.ok&&(r.log_tail||[]).length)
     ?`<details class="pr-log" open><summary>过程日志（最后 ${r.log_tail.length} 条）</summary>
        <div class="pr-lines">${r.log_tail.map(l=>`<div>${esc(l)}</div>`).join("")}</div></details>`:"";
-  return `<div class="proc-res ${r.ok?"ok":"err"}" data-job="${esc(j.id)}">
-    <div class="proc-h">🧠 执行结果<span class="proc-meta">${esc(r.model||"")}/${esc(r.effort||"")} · ${esc((r.finished_at||"").slice(5,16).replace("T"," "))}${r.turns?` · ${r.turns} 步`:""}${r.cost_usd!=null?` · $${(+r.cost_usd).toFixed(2)}`:""} · ${badge}</span>
+  return `<div class="proc-res ${cls}" data-job="${esc(j.id)}">
+    <div class="proc-h">${r.cancelled?"🛑 执行已中止":"🧠 执行结果"}<span class="proc-meta">${esc(r.model||"")}/${esc(r.effort||"")} · ${esc((r.finished_at||"").slice(5,16).replace("T"," "))}${r.turns?` · ${r.turns} 步`:""}${r.cost_usd!=null?` · $${(+r.cost_usd).toFixed(2)}`:""} · ${badge}</span>
       <span class="job-x" data-job="${esc(j.id)}" title="收起">✕</span></div>
     <pre class="proc-sum">${esc(r.summary||"")}</pre>
     ${files}${tail}
-    <div class="proc-note">${r.ok?"已处置的备忘自动勾掉。":"⚠️ 本次未完成，相关备忘<b>仍保留为未处置</b>，可直接重试。"}</div></div>`;
+    <div class="proc-note">${r.ok?"已处置的备忘自动勾掉。"
+      :(r.cancelled?"相关备忘<b>仍保留为未处置</b>，方案还在，随时可以改完再执行。"
+      :"⚠️ 本次未完成，相关备忘<b>仍保留为未处置</b>，可直接重试。")}</div></div>`;
 }
 function renderJobs(){
   const el=$("#jobPanel");if(!el)return;
@@ -1945,6 +1972,7 @@ function renderJobs(){
   el.querySelectorAll(".pr-lines").forEach(b=>{b.scrollTop=b.scrollHeight;});
   el.querySelectorAll(".pr-log").forEach(d=>{d.ontoggle=()=>{_logOpen[d.dataset.job]=d.open;};});
   el.querySelectorAll(".job-x").forEach(x=>{x.onclick=()=>{_hidden.add(x.dataset.job);renderJobs();};});
+  el.querySelectorAll(".pr-cancel").forEach(b=>{b.onclick=()=>cancelJob(b.dataset.job);});
   if(run.length)_procTick=setInterval(()=>{                       // 只动秒表和进度条
     el.querySelectorAll(".pr-wrap").forEach(w=>{
       const t=w.querySelector(".pr-time"),bar=w.querySelector(".pr-bar>i");if(!t)return;
