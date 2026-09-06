@@ -6,9 +6,11 @@
      —— 在线时保证价格/行程新鲜(线上每轮抓价后更新、PDF 随发版更新)，断网才回退缓存。
    同源 GET 才处理；非 GET(写操作)与跨域一律放行网络。
    本地由 FastAPI GET /sw.js 提供、线上预览放在站点根，作用域均为 '/'。 */
-// 前端有结构性改动(新面板/新字段/样式修复)时**必须**升版本号：
-// stale-while-revalidate 会先返回旧 index.html，不换 key 的话老用户要多打开一次才看到新版。
-const CACHE = 'austrip-cache-v7';
+// 缓存键由**工具版本**(flight-monitor/version.py APP_VERSION)派生：
+// 发这个文件时(本地 GET /sw.js、发布时 publish.py)会把下面的 'dev' 替换成真实版本号。
+// 以前这里是手改的 v7——stale-while-revalidate 会先返回旧 index.html，忘了改
+// 老用户就要多打开一次才看到新版。现在升版本 = 自动换键，忘不了。
+const CACHE = 'austrip-cache-0.1.1';   /* APP_VERSION 注入点，勿改字面量 */
 // 数据快照的**稳定键**缓存(键固定为 /snapshot.json，不带 ?t=)：
 // 供「省流量/离线模式」主动读取、以及断网回退——外壳升版时**不清除**它，数据不丢。
 const SNAP_CACHE = 'austrip-snap';

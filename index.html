@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="zh-CN">
 <head>
-<script>window.PREVIEW=true;window.BUILD="20260906232628"</script>
+<script>window.PREVIEW=true;window.BUILD="20260907022821"</script>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
 <title>2026·10 澳洲行 · 行程与价格监测</title>
@@ -72,6 +72,10 @@
   .icon-btn.spin{animation:spin .8s linear infinite}
   .tabs{display:flex;gap:4px;flex:1 1 auto;min-width:0;overflow-x:auto;flex-wrap:nowrap;-webkit-overflow-scrolling:touch;scrollbar-width:none}
   .tabs::-webkit-scrollbar{display:none}
+  /* 页签条溢出时右缘渐隐，提示"还能往右滑"。scrollbar-width:none 把滚动条藏了，
+     没有这个提示用户会以为页签就这些（实测 1024px 下最后两个页签完全不可见）。 */
+  .tabs.has-more{mask-image:linear-gradient(to right,#000 calc(100% - 26px),transparent);
+    -webkit-mask-image:linear-gradient(to right,#000 calc(100% - 26px),transparent)}
   .tab{padding:6px 16px;border-radius:8px;cursor:pointer;color:var(--muted);font-size:14px;border:1px solid transparent;white-space:nowrap}
   .tab:hover{color:var(--fg)}
   .tab.active{color:var(--accent);background:var(--accent-bg);border-color:transparent;font-weight:600}
@@ -265,6 +269,40 @@
   .pr-cancel:disabled{opacity:.55;cursor:default}
   .pr-wrap.cancelling{border-left-color:var(--bad)}
   .proc-res.cancel{border-left:3px solid var(--muted)}
+  /* 🚧 重构计划页 */
+  .plan-wrap{max-width:900px;margin:0 auto;padding:4px 2px 30px}
+  .plan-head{margin:6px 0 18px}
+  .plan-goal{font-size:14px;color:var(--fg);line-height:1.7;margin:6px 0 10px}
+  .plan-meta{font-size:12px;color:var(--muted);line-height:1.9}
+  .plan-bar{height:8px;border-radius:999px;background:var(--panel2);
+    border:1px solid var(--line);overflow:hidden;margin:12px 0 6px}
+  .plan-bar>i{display:block;height:100%;background:var(--accent);transition:width .4s}
+  .plan-pct{font-size:12px;color:var(--fg2);font-weight:600}
+  .pb{background:var(--panel);border:1px solid var(--line);border-radius:12px;
+    padding:13px 15px;margin:12px 0;box-shadow:var(--shadow-1)}
+  .pb.doing{border-left:3px solid var(--accent)}
+  .pb.done{border-left:3px solid var(--good);opacity:.82}
+  .pb.todo{border-left:3px solid var(--line)}
+  .pb-h{display:flex;align-items:center;gap:9px;flex-wrap:wrap;font-size:14px;font-weight:600}
+  .pb-n{font-size:11.5px;padding:2px 9px;border-radius:999px;background:var(--panel2);
+    border:1px solid var(--line);color:var(--fg2);font-weight:500;flex:none}
+  .pb-why{font-size:12.5px;color:var(--muted);line-height:1.75;margin:8px 0 4px}
+  .pb-t{display:flex;gap:8px;align-items:flex-start;font-size:13px;line-height:1.7;
+    padding:4px 0;color:var(--fg)}
+  .pb-t.done{color:var(--muted);text-decoration:line-through;text-decoration-color:var(--line)}
+  .pb-t i{font-style:normal;flex:none;width:15px}
+  .plan-def{margin-top:22px;font-size:12.5px;color:var(--muted);line-height:1.9}
+  .plan-def b{color:var(--fg2)}
+  .appfoot{margin:26px 0 10px;text-align:center;font-size:11.5px;color:var(--muted);
+    line-height:1.9;user-select:text}
+  .appfoot b{font-weight:600;color:var(--fg2)}
+  .plan-chip{font-size:11.5px;padding:3px 10px;border-radius:999px;cursor:pointer;flex:none;
+    background:var(--panel2);border:1px solid var(--line);color:var(--fg2);white-space:nowrap;
+    margin-right:6px;user-select:none}
+  .plan-chip:hover{border-color:var(--accent);color:var(--accent)}
+  .appfoot .af-link{color:var(--accent);text-decoration:none;border-bottom:1px dashed var(--accent)}
+  .appfoot .af-link:hover{opacity:.75}
+  .appfoot .af-sep{opacity:.45;margin:0 6px}
   /* 📊 用量 */
   .usage-box{margin:22px 0 6px;border:1px solid var(--line);border-radius:12px;background:var(--panel);padding:10px 13px}
   .usage-box>summary{cursor:pointer;font-size:13px;color:var(--fg2);user-select:none}
@@ -583,6 +621,8 @@
     <div class="tab" data-tab="map">🗺️ 路线图</div>
   </div>
   <span class="spacer"></span>
+  <!-- 重构进度胶囊：常驻头部，点开计划页。100% 时自行隐藏。 -->
+  <span id="planChip" class="plan-chip" hidden></span>
   <button id="forceRefresh" class="icon-btn" title="强制刷新：忽略缓存、拉取最新数据" aria-label="强制刷新">🔄</button>
   <button id="dataMode" class="icon-btn" title="数据模式" aria-label="数据模式">📶</button>
   <button id="themeToggle" class="icon-btn" title="切换深色 / 浅色" aria-label="切换主题">🌙</button>
@@ -607,6 +647,14 @@
       <div id="list"></div>
     </div>
     <div class="right" id="detail"><div class="empty">← 选择一个监测项查看价格走势</div></div>
+  </div>
+</div>
+
+<!-- ===== 🚧 重构计划与进展 ===== -->
+<div class="view" id="view-plan">
+  <div class="plan-wrap">
+    <div class="plan-head" id="planHead"></div>
+    <div id="planBody"></div>
   </div>
 </div>
 
@@ -717,6 +765,9 @@
 <div class="mask" id="confirmMask"><div class="modal" id="confirmModal" style="width:440px"></div></div>
 
 <div class="toast" id="toast"></div>
+
+<!-- 工具版本页脚：手机上一眼确认拿到的是不是最新那版（≠ 行程版本） -->
+<div class="appfoot" id="appFoot"></div>
 
 <script>
 const $=s=>document.querySelector(s);
@@ -972,9 +1023,18 @@ function switchTab(name){
   if(name==="intake")loadIntake();
   if(name==="itin")loadItinerary();
   if(name==="glance"){if(!PREVIEW){$("#genCard").onclick=genCard;$("#runResearch").onclick=runResearch;}loadGlance();}
+  if(name==="plan")loadPlan();
   if(name==="map"&&!mapLoaded){watchImg($("#routemap"));$("#routemap").src=asset("routemap.svg","/api/routemap?t="+Date.now());mapLoaded=true;}
 }
 document.querySelectorAll(".tab").forEach(t=>t.onclick=()=>switchTab(t.dataset.tab));
+function syncTabsOverflow(){                     // 溢出了才加渐隐，没溢出不平白糊掉最后一个页签
+  const b=document.querySelector(".tabs");if(!b)return;
+  b.classList.toggle("has-more",b.scrollWidth-b.clientWidth>2&&
+    b.scrollLeft+b.clientWidth<b.scrollWidth-2);
+}
+window.addEventListener("resize",syncTabsOverflow);
+document.querySelector(".tabs").addEventListener("scroll",syncTabsOverflow);
+syncTabsOverflow();
 /* 线上不做账单（用户 2026-08-15 定）：整个页签摘掉，而不是留个空壳让人点进去看"尚未发布"。
    快照里也不再带密文（见 publish.PUBLISH_LEDGER），所以这里没有可显示的东西。 */
 if(PREVIEW){const b=document.querySelector('.tab[data-tab="bill"]');if(b)b.remove();
@@ -2360,7 +2420,57 @@ async function saveForm(){const name=$("#f_name").value.trim();if(!name){toast("
 async function delWatch(id){if(!await confirmDialog("确认删除该监测项及其历史？此操作不可撤销。",{title:"删除监测项",okText:"删除",danger:true}))return;await api(`/api/watches/${id}`,{method:"DELETE"});
   selectedId=null;closeDetail();$("#detail").innerHTML=`<div class="empty">已删除</div>`;toast("已删除");await refresh();}
 
-(async()=>{ if(PREVIEW){await loadSnapshot();if(!(SNAP||{})._fromCache)checkStale();} switchTab("today"); skeleton(); await refresh();
+const _PS={done:["done","✅"],doing:["doing","🔨"],todo:["todo","○"]};
+function planBatchHtml(b){
+  const st=b.status||"todo",[cls,_ic]=_PS[st]||_PS.todo;
+  const ts=(b.tasks||[]).map(t=>{
+    const [,ic]=_PS[t.s]||_PS.todo;
+    return `<div class="pb-t ${t.s==="done"?"done":""}"><i>${ic}</i><span>${esc(t.t)}</span></div>`;}).join("");
+  return `<div class="pb ${cls}">
+    <div class="pb-h"><span>${esc(b.name)}</span>
+      <span class="pb-n">${b.done}/${b.total}</span>
+      ${st==="doing"?'<span class="pb-n">进行中</span>':""}</div>
+    ${b.why?`<div class="pb-why">${esc(b.why)}</div>`:""}
+    ${ts}</div>`;
+}
+async function loadPlan(){
+  const head=$("#planHead"),body=$("#planBody");if(!head)return;
+  let d;try{d=await api("/api/plan");}catch(e){body.innerHTML=`<div class="empty">读不到计划：${esc(e.message||e)}</div>`;return;}
+  const pg=d.progress||{done:0,total:0,pct:0};
+  head.innerHTML=`<div class="plan-goal">${esc(d.goal||"")}</div>
+    <div class="plan-bar"><i style="width:${pg.pct}%"></i></div>
+    <div class="plan-pct">${pg.done} / ${pg.total} 项完成 · ${pg.pct}%</div>
+    <div class="plan-meta">定于 ${esc(d.decided_at||"")}
+      ${d.optimize_mode?`<br>optimize：${esc(d.optimize_mode)}`:""}</div>`;
+  body.innerHTML=(d.batches||[]).map(planBatchHtml).join("")
+    +((d.deferred||[]).length?`<div class="plan-def"><b>暂缓 / 已知欠账</b><br>`
+      +d.deferred.map(x=>"· "+esc(x)).join("<br>")+`</div>`:"");
+}
+async function loadAppVersion(){
+  const el=$("#appFoot");if(!el)return;
+  try{
+    // 线上是静态站、没有这两个端点：快照里带了版本，进度则本来就不该给同行的人看。
+    const v=PREVIEW?((SNAP||{}).app||null):await api("/api/version");
+    if(!v||!v.version){el.textContent="";return;}
+    const c=v.commit?`<span class="af-sep">·</span>${esc(v.commit)}`:"";
+    const t=v.commit_at?`<span class="af-sep">·</span>${esc(String(v.commit_at).slice(0,10))}`:"";
+    el.innerHTML=`监测工具 <b>v${esc(v.version)}</b>${c}${t}`;
+  }catch(e){el.textContent="";}
+}
+async function loadPlanChip(){
+  // 计划入口不做成页签：页签条 1024px 就已经排不下、滚动条还是隐藏的（用户实际没找到）。
+  // 放头部常驻，一眼看见进度、一点进详情。
+  const el=$("#planChip");if(!el||PREVIEW)return;
+  try{
+    const d=await api("/api/plan"),g=d.progress;
+    if(!g||!g.total||g.pct>=100){el.hidden=true;return;}
+    el.textContent=`🚧 ${g.done}/${g.total} · ${g.pct}%`;
+    el.title=`${d.title||"重构"}：点击查看计划与进展`;
+    el.hidden=false;
+    el.onclick=()=>{switchTab("plan");window.scrollTo(0,0);};
+  }catch(e){el.hidden=true;}
+}
+(async()=>{ if(PREVIEW){await loadSnapshot();if(!(SNAP||{})._fromCache)checkStale();} switchTab("today"); skeleton(); await refresh(); loadAppVersion(); loadPlanChip();
   const w=+new URLSearchParams(location.search).get("w");   // 深链 ?w=<id> 直达某监测项（移动端亦可分享）
   if(w&&watches.some(x=>x.id===w))selectWatch(w);
 })();
