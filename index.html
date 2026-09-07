@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="zh-CN">
 <head>
-<script>window.PREVIEW=true;window.BUILD="20260907112621"</script>
+<script>window.PREVIEW=true;window.BUILD="20260907142747"</script>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
 <title>2026·10 澳洲行 · 行程与价格监测</title>
@@ -296,6 +296,17 @@
   .appfoot{margin:26px 0 10px;text-align:center;font-size:11.5px;color:var(--muted);
     line-height:1.9;user-select:text}
   .appfoot b{font-weight:600;color:var(--fg2)}
+  .jobbar{position:fixed;left:50%;transform:translateX(-50%);bottom:18px;z-index:60;
+    max-width:min(560px,calc(100vw - 24px));background:var(--panel);border:1px solid var(--c-blue-bd);
+    border-left:3px solid var(--accent);border-radius:12px;padding:10px 14px;
+    box-shadow:0 6px 24px rgba(0,0,0,.18);font-size:12.5px}
+  .jobbar-h{display:flex;align-items:center;gap:8px;font-weight:600;color:var(--accent)}
+  .jobbar-step{color:var(--fg);margin-top:5px;line-height:1.6;word-break:break-word}
+  .jobbar-meta{color:var(--muted);font-size:11.5px;margin-top:4px}
+  .jobbar-x{margin-left:auto;font-size:11.5px;padding:2px 9px;border-radius:999px;flex:none;
+    background:var(--panel2);border:1px solid var(--line);color:var(--fg2);cursor:pointer}
+  .jobbar-x:hover:not(:disabled){border-color:var(--bad);color:var(--bad)}
+  .jobbar-x:disabled{opacity:.55;cursor:default}
   .plan-chip{font-size:11.5px;padding:3px 10px;border-radius:999px;cursor:pointer;flex:none;
     background:var(--panel2);border:1px solid var(--line);color:var(--fg2);white-space:nowrap;
     margin-right:6px;user-select:none}
@@ -763,6 +774,9 @@
 <!-- 高危操作的二次确认（独立 mask，避免和监测项表单抢同一个容器） -->
 <div class="mask" id="totpMask"><div class="modal" id="totpModal"></div></div>
 <div class="mask" id="confirmMask"><div class="modal" id="confirmModal" style="width:440px"></div></div>
+
+<!-- 通用任务浮条：联网研究/购物攻略这类跨页签的长任务，进度与中止都在这儿 -->
+<div class="jobbar" id="jobBar" hidden></div>
 
 <div class="toast" id="toast"></div>
 
@@ -1573,11 +1587,10 @@ async function genCard(){
   catch(e){toast("生成失败："+e.message,false);}
 }
 async function runResearch(){
-  toast("联网研究中…约 1–2 分钟，请稍候");
+  // 异步起任务：进度与中止都在底部浮条上，不再挂着一个十几分钟的 fetch
   try{const r=await api("/api/research/run",{method:"POST"});
-    renderResearch();
-    if(r.error)toast("研究返回异常："+r.error,false);
-    else toast(`联网研究完成 · 景点${(r.attractions||[]).length} 经验${(r.tips||[]).length}`);}
+    toast((r&&r.message)||(r&&r.ok?"已开始联网研究，进度见底部":"启动失败"),!!(r&&r.ok));
+    pollJobBar();}
   catch(e){toast("研究失败："+e.message,false);}
 }
 
@@ -1875,11 +1888,10 @@ async function loadShopping(){
   </div>`;
 }
 async function refreshShopping(){
-  const b=$("#shopRefresh");if(b){b.textContent="联网中…";b.disabled=true;}
-  toast("联网研究中，约几分钟…");
-  try{await api("/api/shopping/refresh",{method:"POST"});toast("已更新");await loadShopping();}
+  try{const r=await api("/api/shopping/refresh",{method:"POST"});
+    toast((r&&r.message)||(r&&r.ok?"已开始联网研究，进度见底部":"启动失败"),!!(r&&r.ok));
+    pollJobBar();}
   catch(e){toast("失败："+e.message,false);}
-  finally{if(b){b.textContent="🌐 联网刷新";b.disabled=false;}}
 }
 
 /* ---- 🤖 AI 录入：自然语言 → 提案 → 确认 → 落库（本地专用） ---- */
@@ -2457,6 +2469,39 @@ async function loadAppVersion(){
     el.innerHTML=`监测工具 <b>v${esc(v.version)}</b>${c}${t}`;
   }catch(e){el.textContent="";}
 }
+let _barPoll=null,_barDone={};
+const BAR_KINDS={research:"联网研究",shopping:"购物攻略研究",hotel_research:"目标酒店研究"};
+async function pollJobBar(){
+  const el=$("#jobBar");if(!el||PREVIEW)return;
+  let st;try{st=await api("/api/intake/jobs");}catch(e){return;}
+  const live=(st.jobs||[]).filter(j=>BAR_KINDS[j.kind]&&j.state!=="done");
+  // 刚跑完的：报一次结果就撤（成功/失败/中止分别给不同话术）
+  (st.jobs||[]).filter(j=>BAR_KINDS[j.kind]&&j.state==="done"&&!_barDone[j.id]).forEach(j=>{
+    _barDone[j.id]=1;const r=j.result||{};
+    if(r.cancelled)toast(`${BAR_KINDS[j.kind]}已中止`,false);
+    else if(r.ok){toast(`${BAR_KINDS[j.kind]}完成`);if(j.kind==="research")renderResearch();
+                  if(j.kind==="shopping")loadShopping();}
+    else toast(`${BAR_KINDS[j.kind]}失败：${(r.note||r.summary||"").slice(0,60)}`,false);
+  });
+  clearTimeout(_barPoll);
+  if(!live.length){el.hidden=true;return;}
+  const j=live[0],pg=j.progress||{};
+  const el2=(pg.files||[]).length?` · 已改 ${pg.files.length} 个文件`:"";
+  el.innerHTML=`<div class="jobbar-h"><span class="proc-spin"></span>
+      <span>${esc(BAR_KINDS[j.kind])}${j.state==="queued"?"（排队中）":""}</span>
+      <button class="jobbar-x" id="jobBarX"${j.cancel_requested?" disabled":""}>${
+        j.cancel_requested?"中止中…":"🛑 中止"}</button></div>
+    <div class="jobbar-step">${esc(pg.step||"启动中…")}</div>
+    <div class="jobbar-meta">第 ${pg.turns||0} 步${el2}${
+      live.length>1?` · 另有 ${live.length-1} 个任务`:""} · 可离开本页，任务在本机继续跑</div>`;
+  el.hidden=false;
+  const x=$("#jobBarX");
+  if(x)x.onclick=async()=>{
+    try{const r=await api(`/api/intake/jobs/${encodeURIComponent(j.id)}/cancel`,{method:"POST"});
+      toast((r&&r.message)||"已发出中止",!!(r&&r.ok));pollJobBar();}
+    catch(e){toast("中止失败："+(e.message||e),false);}};
+  _barPoll=setTimeout(pollJobBar,2500);
+}
 async function loadPlanChip(){
   // 计划入口不做成页签：页签条 1024px 就已经排不下、滚动条还是隐藏的（用户实际没找到）。
   // 放头部常驻，一眼看见进度、一点进详情。
@@ -2470,7 +2515,7 @@ async function loadPlanChip(){
     el.onclick=()=>{switchTab("plan");window.scrollTo(0,0);};
   }catch(e){el.hidden=true;}
 }
-(async()=>{ if(PREVIEW){await loadSnapshot();if(!(SNAP||{})._fromCache)checkStale();} switchTab("today"); skeleton(); await refresh(); loadAppVersion(); loadPlanChip();
+(async()=>{ if(PREVIEW){await loadSnapshot();if(!(SNAP||{})._fromCache)checkStale();} switchTab("today"); skeleton(); await refresh(); loadAppVersion(); loadPlanChip(); pollJobBar();
   const w=+new URLSearchParams(location.search).get("w");   // 深链 ?w=<id> 直达某监测项（移动端亦可分享）
   if(w&&watches.some(x=>x.id===w))selectWatch(w);
 })();
