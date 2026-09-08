@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="zh-CN">
 <head>
-<script>window.PREVIEW=true;window.BUILD="20260908194745"</script>
+<script>window.PREVIEW=true;window.BUILD="20260908224733"</script>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
 <title>2026·10 澳洲行 · 行程与价格监测</title>
@@ -296,6 +296,15 @@
   .appfoot{margin:26px 0 10px;text-align:center;font-size:11.5px;color:var(--muted);
     line-height:1.9;user-select:text}
   .appfoot b{font-weight:600;color:var(--fg2)}
+  .rt-seg{margin:6px 0 10px}
+  .rt-head{font-size:12.5px;color:var(--fg2);font-weight:600;margin-bottom:5px}
+  .rt-stops{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:7px}
+  .rt-stop{font-size:11.5px;padding:2px 9px;border-radius:999px;background:var(--panel2);
+    border:1px solid var(--line);color:var(--fg2)}
+  .rt-go{display:inline-block;font-size:12.5px;color:var(--accent);text-decoration:none;
+    border-bottom:1px dashed var(--accent)}
+  .rt-go:hover{opacity:.75}
+  .rt-skip{font-size:11.5px;color:var(--muted);margin-top:4px}
   .jobbar{position:fixed;left:50%;transform:translateX(-50%);bottom:18px;z-index:60;
     max-width:min(560px,calc(100vw - 24px));background:var(--panel);border:1px solid var(--c-blue-bd);
     border-left:3px solid var(--accent);border-radius:12px;padding:10px 14px;
@@ -1029,7 +1038,7 @@ function switchTab(name){
   if(!PREVIEW&&name==="monitor"){$("#fetchAll").onclick=fetchAll;$("#addBtn").onclick=()=>openForm(null);}
   if(!PREVIEW&&name==="reflect"){$("#reflectRun").onclick=runReflect;$("#reflectRefresh").onclick=loadReflect;}
   if(!PREVIEW&&name==="shop"){const b=$("#shopRefresh");if(b)b.onclick=refreshShopping;}
-  if(name==="today")loadToday(curDay);
+  if(name==="today"){loadRoutes().then(()=>loadToday(curDay));}
   if(name==="crew")loadCrew();
   if(name==="bill")loadBill();
   if(name==="reflect")loadReflect();
@@ -1092,6 +1101,31 @@ async function loadToday(d){
   $("#dayList").querySelectorAll(".dcard").forEach(c=>c.onclick=()=>loadToday(c.dataset.d));
   renderDay(t);
 }
+/* ---- 🗺 当天轨迹：跳转 Google Maps，不嵌地图（免 API key、静态站也能用） ---- */
+let _ROUTES=null;
+async function loadRoutes(){
+  if(_ROUTES)return _ROUTES;
+  try{const r=await api("/api/routes");_ROUTES={};(r.routes||[]).forEach(x=>{_ROUTES[x.date]=x;});}
+  catch(e){_ROUTES={};}
+  return _ROUTES;
+}
+function routeHtml(date){
+  const r=(_ROUTES||{})[date];
+  if(!r||!(r.segments||[]).length)return "";
+  // 转场日会有两段（上午在出发地、傍晚在目的地），各自一条路线——一天跨两个州时
+  // 合成一条链接必然有一半是错的
+  return `<fieldset><legend>🗺 当天轨迹</legend>${r.segments.map(g=>`
+    <div class="rt-seg">
+      <div class="rt-head">🏠 ${esc((g.stay||{}).name||"无住宿锚点")}${
+        r.segments.length>1?` <span class="badge">${esc(g.city||"")}</span>`:""}</div>
+      <div class="rt-stops">${g.stops.map((s,i)=>
+        `<span class="rt-stop">${i+1}. ${esc(s.label)}</span>`).join("")}</div>
+      ${g.url?`<a class="rt-go" href="${esc(g.url)}" target="_blank" rel="noopener">
+        在 Google Maps 打开这条路线 →</a>`:""}
+    </div>`).join("")}
+    ${(r.skipped||[]).length?`<div class="rt-skip">另有 ${r.skipped.length} 条没进轨迹（航班/接送/取行李这类不是地点）</div>`:""}
+  </fieldset>`;
+}
 function renderDay(t){
   const d=t.day||{},items=d.items||[];
   const cd=t.days_until_trip>0?`<div class="cdown"><div style="color:var(--muted);font-size:12px">距出发还有</div>
@@ -1118,7 +1152,7 @@ function renderDay(t){
       <h2>${esc(d.title||'')}</h2></div>
     <div class="kv"><span>${d.date}</span><span>${esc(d.city||'')}</span></div>
     <p style="color:var(--muted);font-size:13px">${esc(d.summary||'')}</p>
-    ${wx}${plan}${sched}${fl}`;
+    ${wx}${plan}${sched}${routeHtml(d.date)}${fl}`;
   if(isMobile()){$("#dayDetail").classList.add("open");$("#dayDetail").scrollTop=0;}
 }
 function closeDayDetail(){$("#dayDetail").classList.remove("open");}
