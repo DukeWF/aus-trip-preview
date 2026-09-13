@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="zh-CN">
 <head>
-<script>window.PREVIEW=true;window.BUILD="20260913202640"</script>
+<script>window.PREVIEW=true;window.BUILD="20260913230625"</script>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
 <title>2026·10 澳洲行 · 行程与价格监测</title>
@@ -296,6 +296,11 @@
   .appfoot{margin:26px 0 10px;text-align:center;font-size:11.5px;color:var(--muted);
     line-height:1.9;user-select:text}
   .appfoot b{font-weight:600;color:var(--fg2)}
+  .subtabs{display:flex;gap:6px;flex-wrap:wrap;padding:9px 20px 0;max-width:1400px;margin:0 auto}
+  .subtab{font-size:12.5px;padding:4px 12px;border-radius:999px;cursor:pointer;user-select:none;
+    color:var(--muted);background:var(--panel2);border:1px solid var(--line)}
+  .subtab:hover{color:var(--fg)}
+  .subtab.active{color:var(--accent);border-color:var(--c-blue-bd);background:var(--accent-bg);font-weight:600}
   .rt-seg{margin:6px 0 10px}
   .rt-head{font-size:12.5px;color:var(--fg2);font-weight:600;margin-bottom:5px}
   .rt-stops{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:7px}
@@ -477,7 +482,7 @@
     header h1{font-size:17px}
     .tabs{overflow-x:auto;flex-wrap:nowrap;max-width:100%;-webkit-overflow-scrolling:touch;scrollbar-width:none}
     .tabs::-webkit-scrollbar{display:none}
-    .tab{white-space:nowrap;padding:6px 12px}
+    .tab{white-space:nowrap;padding:6px 10px}   /* 收 2px：6 个签正好塞进 390px 窄屏 */
     #hdrActions{width:100%;order:9}#hdrActions button{flex:1}
     .layout{flex-direction:column;height:auto}
     .left{width:auto;min-width:0;border-right:0;border-bottom:1px solid var(--line);max-height:none}
@@ -630,15 +635,11 @@
   <h1>🦘 2026·10 澳洲行</h1>
   <div class="tabs">
     <div class="tab active" data-tab="today">📅 今日</div>
-    <div class="tab" data-tab="crew">👥 同行</div>
-    <div class="tab" data-tab="bill">💰 账单</div>
-    <div class="tab" data-tab="monitor">✈️ 价格监测</div>
-    <div class="tab" data-tab="reflect">🔍 自省</div>
-    <div class="tab" data-tab="intake">🤖 录入</div>
-    <div class="tab" data-tab="shop">🛍️ 买在澳洲</div>
     <div class="tab" data-tab="itin">📋 行程</div>
-    <div class="tab" data-tab="glance">📸 速览</div>
-    <div class="tab" data-tab="map">🗺️ 路线图</div>
+    <div class="tab" data-tab="monitor">✈️ 监测</div>
+    <div class="tab" data-tab="intake">🤖 录入</div>
+    <div class="tab" data-tab="crew">👥 同行</div>
+    <div class="tab" data-tab="reflect">🔍 自省</div>
   </div>
   <span class="spacer"></span>
   <!-- 重构进度胶囊：常驻头部，点开计划页。100% 时自行隐藏。 -->
@@ -669,6 +670,8 @@
     <div class="right" id="detail"><div class="empty">← 选择一个监测项查看价格走势</div></div>
   </div>
 </div>
+
+<div class="subtabs" id="subTabs" hidden></div>
 
 <!-- ===== 🚧 重构计划与进展 ===== -->
 <div class="view" id="view-plan">
@@ -748,11 +751,6 @@
 </div></div>
 
 <!-- ===== 路线图 ===== -->
-<div class="view" id="view-map"><div class="mapwrap">
-  <img id="routemap" alt="路线图" />
-  <p style="color:var(--muted);font-size:13px;text-align:center">路线图由 trip-planner skill 的 gen_routemap.py 生成，随行程版本化。</p>
-</div></div>
-
 <!-- 表单 -->
 <div class="mask" id="mask"><div class="modal">
   <h3 id="formTitle">新增监测</h3>
@@ -1023,17 +1021,46 @@ function confirmDialog(message,{title="确认操作",okText="确认",danger=fals
 }
 if("serviceWorker" in navigator){window.addEventListener("load",()=>navigator.serviceWorker.register("/sw.js").catch(()=>{}));}
 
-/* ---- Tab 切换 ---- */
+/* ---- Tab 切换：6 个顶层分组，组内多页用二级条 ----
+   以前是「功能即页签」，加一个能力就加一个签，10 个签在 1024px 就排不下、
+   而滚动条是隐藏的——用户实际找不到最后两个（计划页就这么被漏掉过）。
+   现在按"这是同一件事的不同面"归组，组内切换走二级条。 */
+const GROUPS=[
+  {k:"today",  views:[["today","今日"]]},
+  {k:"itin",   views:[["itin","正文"],["glance","速览"],["shop","买在澳洲"]]},
+  {k:"monitor",views:[["monitor","价格与决策"]]},
+  {k:"intake", views:[["intake","录入"]]},
+  {k:"crew",   views:[["crew","同行"],["bill","账单"]]},
+  {k:"reflect",views:[["reflect","自省"]]},
+];
+const _groupOf=v=>(GROUPS.find(g=>g.views.some(x=>x[0]===v))||{}).k;
+let _lastSub={};                                  // 记住每组上次停在哪一页
+function renderSubTabs(view){
+  const el=$("#subTabs");if(!el)return;
+  const g=GROUPS.find(x=>x.k===_groupOf(view));
+  const vs=(g&&g.views||[]).filter(([v])=>document.getElementById("view-"+v));
+  if(!g||vs.length<2){el.hidden=true;el.innerHTML="";return;}
+  el.innerHTML=vs.map(([v,label])=>
+    `<span class="subtab ${v===view?"active":""}" data-v="${v}">${esc(label)}</span>`).join("");
+  el.hidden=false;
+  el.querySelectorAll(".subtab").forEach(t=>{t.onclick=()=>switchTab(t.dataset.v);});
+}
 function switchTab(name){
-  document.querySelectorAll(".tab").forEach(t=>t.classList.toggle("active",t.dataset.tab===name));
+  const g=_groupOf(name);
+  if(g)_lastSub[g]=name;
+  document.querySelectorAll(".tab").forEach(t=>{
+    // 点顶层签时回到该组上次停留的页；高亮按**组**算，不按具体页算
+    t.classList.toggle("active",t.dataset.tab===g);
+  });
   document.querySelectorAll(".view").forEach(v=>v.classList.toggle("active",v.id==="view-"+name));
+  renderSubTabs(name);
   const acts=PREVIEW?{}:{           // 预览模式：不渲染任何写操作按钮
     monitor:`<button id="fetchAll">⟳ 抓全部</button> <button class="primary" id="addBtn">+ 新增监测</button>`,
     reflect:`<button id="reflectRun" class="primary">🔍 立即自省</button> <button id="reflectRefresh">↻ 刷新</button>`,
     shop:PREVIEW?``:`<button id="shopRefresh">🌐 联网刷新</button>`,
     itin:`<button onclick="window.open(asset('itinerary.pdf','/api/itinerary.pdf'),'_blank')">🖨️ 打印版 PDF</button> <button onclick="loadItinerary()">↻ 刷新行程</button>`,
     glance:`<button id="genCard" class="primary">🔄 生成速览</button> <button id="runResearch">🌐 联网研究</button>`,
-    map:``};
+  };
   $("#hdrActions").innerHTML = acts[name] || (PREVIEW?verBadge():``);
   if(!PREVIEW&&name==="monitor"){$("#fetchAll").onclick=fetchAll;$("#addBtn").onclick=()=>openForm(null);}
   if(!PREVIEW&&name==="reflect"){$("#reflectRun").onclick=runReflect;$("#reflectRefresh").onclick=loadReflect;}
@@ -1047,9 +1074,11 @@ function switchTab(name){
   if(name==="itin")loadItinerary();
   if(name==="glance"){if(!PREVIEW){$("#genCard").onclick=genCard;$("#runResearch").onclick=runResearch;}loadGlance();}
   if(name==="plan")loadPlan();
-  if(name==="map"&&!mapLoaded){watchImg($("#routemap"));$("#routemap").src=asset("routemap.svg","/api/routemap?t="+Date.now());mapLoaded=true;}
 }
-document.querySelectorAll(".tab").forEach(t=>t.onclick=()=>switchTab(t.dataset.tab));
+document.querySelectorAll(".tab").forEach(t=>t.onclick=()=>{
+  const k=t.dataset.tab,g=GROUPS.find(x=>x.k===k);
+  switchTab(_lastSub[k]||(g?g.views[0][0]:k));
+});
 function syncTabsOverflow(){                     // 溢出了才加渐隐，没溢出不平白糊掉最后一个页签
   const b=document.querySelector(".tabs");if(!b)return;
   b.classList.toggle("has-more",b.scrollWidth-b.clientWidth>2&&
@@ -1093,7 +1122,7 @@ async function loadToday(d){
       <input type="date" id="dPick" value="${t.date}" min="${t.range[0]}" max="${t.range[1]}"/>
       <button id="dToday">回到今天</button></div>`
     +t.index.map(x=>`<div class="dcard ${x.date===t.date?'active':''} ${x.date===t.today?'isnow':''}" data-d="${x.date}">
-      <div class="dtop"><span class="dseq">D${x.seq}</span><span class="dttl">${esc(x.title)}</span>
+      <div class="dtop"><span class="dseq">D${(x.seq||0)+1}</span><span class="dttl">${esc(x.title)}</span>
         <span class="risk ${x.weather_risk}">${(RISK_TXT[x.weather_risk]||'').slice(0,2)}</span></div>
       <div class="dsub">${x.date.slice(5)} · ${esc(x.city||'')}</div></div>`).join("");
   $("#dPick").onchange=e=>loadToday(e.target.value);
@@ -1148,7 +1177,7 @@ function renderDay(t){
     </tbody></table></fieldset>`:"";
   $("#dayDetail").innerHTML=`<button id="detailBack" onclick="closeDayDetail()">← 返回日期</button>
     ${cd}${oor}
-    <div class="detail-head"><span class="badge">D${d.seq}</span><span class="risk ${d.weather_risk}">${RISK_TXT[d.weather_risk]||''}</span>
+    <div class="detail-head"><span class="badge">D${(d.seq||0)+1}</span><span class="risk ${d.weather_risk}">${RISK_TXT[d.weather_risk]||''}</span>
       <h2>${esc(d.title||'')}</h2></div>
     <div class="kv"><span>${d.date}</span><span>${esc(d.city||'')}</span></div>
     <p style="color:var(--muted);font-size:13px">${esc(d.summary||'')}</p>
