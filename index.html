@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="zh-CN">
 <head>
-<script>window.PREVIEW=true;window.BUILD="20260918142858"</script>
+<script>window.PREVIEW=true;window.BUILD="20260918220618"</script>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
 <title>2026·10 澳洲行 · 行程与价格监测</title>
@@ -400,7 +400,7 @@
   .opt{display:flex;justify-content:space-between;padding:4px 0;border-bottom:1px dashed var(--line);font-size:13px}.opt:last-child{border:0}
   .actions{display:flex;gap:8px;margin-top:12px;flex-wrap:wrap}
   .empty{color:var(--muted);text-align:center;margin-top:80px}
-  #detailBack{display:none;margin-bottom:10px}   /* 仅移动端抽屉显示 */
+  .dback{display:none;margin-bottom:10px}   /* 详情抽屉的返回按钮：仅手机抽屉打开时显示 */
   /* ---- 行程 ---- */
   .doc{max-width:960px;margin:0 auto;padding:24px 28px}
   .doc h1{font-size:24px;border-bottom:1px solid var(--line);padding-bottom:8px}
@@ -509,13 +509,14 @@
     /* 大数字紧跟标签、不推到最右，杜绝被右缘裁切 */
     .bestbar .ptotal,.spread .sd,.dephead .dh-best{margin-left:8px}
     .dephead{justify-content:flex-start}
-    /* 详情抽屉：选中即全屏覆盖弹出，不必滚到列表最底部；顶部返回按钮回列表 */
-    #detail{padding:0}
-    #detail.open{position:fixed;inset:0;z-index:45;background:var(--bg);overflow:auto;
+    /* 统一详情抽屉（今日 / 监测 / 同行共用）：点列表项 → 全屏覆盖弹出；返回按钮或系统返回键回列表。
+       以前只有监测页写了这套样式，今日 / 同行的 JS 加了 open 类却没有对应 CSS——手机上点了之后
+       详情只在列表下方（今日页甚至在屏幕外）更新，看起来"点了没反应"。 */
+    .drawer.open{position:fixed;inset:0;z-index:45;background:var(--bg);overflow:auto;
       padding:calc(10px + env(safe-area-inset-top)) 14px calc(20px + env(safe-area-inset-bottom));
       animation:slideup .18s ease}
-    #detail:not(.open){display:none}          /* 未选中时不占位，列表铺满 */
-    #detail.open #detailBack{display:inline-flex;position:sticky;top:0;z-index:2}
+    .drawer:not(.open){display:none}          /* 未选中时不占位，列表铺满 */
+    .drawer.open .dback{display:inline-flex;position:sticky;top:0;z-index:2}
   }
   @keyframes slideup{from{transform:translateY(14px);opacity:.4}to{transform:none;opacity:1}}
   /* ---- 平板 / 横屏手机（641–1000px）：双栏仍并列但收窄侧栏，避免右栏被 400px 侧栏挤瘪 ---- */
@@ -667,7 +668,7 @@
       </div>
       <div id="list"></div>
     </div>
-    <div class="right" id="detail"><div class="empty">← 选择一个监测项查看价格走势</div></div>
+    <div class="right drawer" id="detail"><div class="empty">← 选择一个监测项查看价格走势</div></div>
   </div>
 </div>
 
@@ -685,7 +686,7 @@
 <div class="view active" id="view-today">
   <div class="layout">
     <div class="left" id="dayList"></div>
-    <div class="right" id="dayDetail"><div class="empty">加载中…</div></div>
+    <div class="right drawer" id="dayDetail"><div class="empty">加载中…</div></div>
   </div>
 </div>
 
@@ -693,7 +694,7 @@
 <div class="view" id="view-crew">
   <div class="layout">
     <div class="left" id="crewList"></div>
-    <div class="right" id="crewDetail"><div class="empty">← 选择一位同行成员</div></div>
+    <div class="right drawer" id="crewDetail"><div class="empty">← 选择一位同行成员</div></div>
   </div>
 </div>
 
@@ -810,7 +811,7 @@ function applyTheme(mode,reload){        // mode: "light" | "dark" | null(跟随
   if(btn)btn.textContent=dark?"☀️":"🌙";
   const mc=document.querySelector('meta[name="theme-color"]');
   if(mc)mc.setAttribute("content",CV('--panel')||(dark?"#1B1E25":"#ffffff"));
-  if(reload){const a=document.querySelector(".tab.active");if(a&&typeof switchTab==="function")switchTab(a.dataset.tab);}
+  if(reload){const v=document.querySelector(".view.active");if(v&&typeof switchTab==="function")switchTab(v.id.slice(5));}   // 按当前视图重进：按组会把速览 / 账单弹回组首页
 }
 (function initTheme(){
   const saved=localStorage.getItem("theme");
@@ -915,7 +916,7 @@ function updateDataModeUI(){
 }
 async function reRenderActive(){                          // 用当前 SNAP 重渲染在显视图
   try{await refresh();}catch(e){}
-  const a=document.querySelector(".tab.active");if(a&&typeof switchTab==="function")switchTab(a.dataset.tab);
+  const v=document.querySelector(".view.active");if(v&&typeof switchTab==="function")switchTab(v.id.slice(5));   // "view-xxx" → xxx
 }
 async function forceRefresh(){
   const b=$("#forceRefresh");if(b)b.classList.add("spin");
@@ -1046,6 +1047,9 @@ function renderSubTabs(view){
   el.querySelectorAll(".subtab").forEach(t=>{t.onclick=()=>switchTab(t.dataset.v);});
 }
 function switchTab(name){
+  // 真的换到别的视图才收抽屉；同页重绘（换主题 / 刷新数据会再调一次当前页）不动它，否则读着读着自己关了
+  const cur=document.querySelector(".view.active");
+  if(!cur||cur.id!=="view-"+name)closeDrawer();
   const g=_groupOf(name);
   if(g)_lastSub[g]=name;
   document.querySelectorAll(".tab").forEach(t=>{
@@ -1125,9 +1129,10 @@ async function loadToday(d){
       <div class="dtop"><span class="dseq">D${(x.seq||0)+1}</span><span class="dttl">${esc(x.title)}</span>
         <span class="risk ${x.weather_risk}">${(RISK_TXT[x.weather_risk]||'').slice(0,2)}</span></div>
       <div class="dsub">${x.date.slice(5)} · ${esc(x.city||'')}</div></div>`).join("");
-  $("#dPick").onchange=e=>loadToday(e.target.value);
-  $("#dToday").onclick=()=>loadToday(t.today);
-  $("#dayList").querySelectorAll(".dcard").forEach(c=>c.onclick=()=>loadToday(c.dataset.d));
+  // 只有用户点选才弹出详情抽屉；开页 / 切回「今日」的程序性渲染不弹，否则一进页面列表就被盖住
+  $("#dPick").onchange=e=>loadToday(e.target.value).then(()=>openDrawer("#dayDetail"));
+  $("#dToday").onclick=()=>loadToday(t.today).then(()=>openDrawer("#dayDetail"));
+  $("#dayList").querySelectorAll(".dcard").forEach(c=>c.onclick=()=>loadToday(c.dataset.d).then(()=>openDrawer("#dayDetail")));
   renderDay(t);
 }
 /* ---- 🗺 当天轨迹：跳转 Google Maps，不嵌地图（免 API key、静态站也能用） ---- */
@@ -1175,16 +1180,15 @@ function renderDay(t){
       <td>${esc([f.from_name||f.from_code,f.to_name||f.to_code].filter(Boolean).join("→")||"—")}</td>
       <td>${esc((f.dep_time||"").slice(11,16)||"—")}${f.arr_time?" → "+esc(f.arr_time.slice(5,16)):""}</td></tr>`).join("")}
     </tbody></table></fieldset>`:"";
-  $("#dayDetail").innerHTML=`<button id="detailBack" onclick="closeDayDetail()">← 返回日期</button>
+  $("#dayDetail").innerHTML=`<button class="dback" onclick="closeDrawer()">← 返回日期</button>
     ${cd}${oor}
     <div class="detail-head"><span class="badge">D${(d.seq||0)+1}</span><span class="risk ${d.weather_risk}">${RISK_TXT[d.weather_risk]||''}</span>
       <h2>${esc(d.title||'')}</h2></div>
     <div class="kv"><span>${d.date}</span><span>${esc(d.city||'')}</span></div>
     <p style="color:var(--muted);font-size:13px">${esc(d.summary||'')}</p>
     ${wx}${plan}${sched}${routeHtml(d.date)}${fl}`;
-  if(isMobile()){$("#dayDetail").classList.add("open");$("#dayDetail").scrollTop=0;}
 }
-function closeDayDetail(){$("#dayDetail").classList.remove("open");}
+function closeDayDetail(){closeDrawer();}   // 兼容旧调用
 
 /* ---- 同行成员 ---- */
 const MSTATUS={approved:["appr","已审核"],pending:["pend","待审核"],rejected:["rej","已拒绝"]};
@@ -1205,7 +1209,7 @@ async function loadCrew(){
       <span class="mname">${esc(m.name)}</span><span class="badge ${cls}">${txt}</span></div>
       <div class="dsub">${[m.home_city,m.gender,m.mbti].filter(Boolean).map(esc).join(" · ")||"—"}
         · ${(m.flights||[]).length||m.n_flights||0} 段</div></div>`;}).join("")+add;
-  $("#crewList").querySelectorAll(".dcard").forEach(c=>c.onclick=()=>showMember(+c.dataset.m));
+  $("#crewList").querySelectorAll(".dcard").forEach(c=>c.onclick=()=>{showMember(+c.dataset.m);openDrawer("#crewDetail");});
   if(!PREVIEW){$("#mAdd").onclick=()=>editMember(null);
     $("#mPoll").onclick=pollMail;$("#mReg").onclick=showRegForm;}
   if(curMember)showMember(curMember);
@@ -1233,14 +1237,13 @@ function showMember(id){
     <button onclick="totpPanel(${m.id})">🔐 二次验证</button>
     <button class="danger" onclick="delMember(${m.id})">删除</button></div>`;
   const tb=PREVIEW||!totpOf(m.id).bound_at?"":'<span class="badge appr">🔐 已绑定</span>';
-  $("#crewDetail").innerHTML=`<button id="detailBack" onclick="$('#crewDetail').classList.remove('open')">← 返回</button>
+  $("#crewDetail").innerHTML=`<button class="dback" onclick="closeDrawer()">← 返回</button>
     <div class="detail-head"><span class="badge ${cls}">${txt}</span>
       ${m.source==="selfreg"?'<span class="badge">自助注册</span>':''}${tb}<h2>${esc(m.name)}</h2></div>
     <div class="kv"><span>出发地 <b>${esc(m.home_city||'—')}</b></span><span>性别 <b>${esc(m.gender||'—')}</b></span>
       <span>MBTI <b>${esc(m.mbti||'—')}</b></span>${m.contact?`<span>联系 <b>${esc(m.contact)}</b>（仅本地）</span>`:''}</div>
     ${m.note?`<p style="color:var(--muted);font-size:13px">${esc(m.note)}</p>`:""}
     ${masked}${fl}${acts}`;
-  if(isMobile())$("#crewDetail").classList.add("open");
 }
 function loadCrewHighlight(){$("#crewList").querySelectorAll(".dcard").forEach(c=>
   c.classList.toggle("active",+c.dataset.m===curMember));}
@@ -1251,7 +1254,8 @@ function fareForm(mid,idx){
   const f=(m.flights||[])[idx];if(!f)return;
   const mkt=(watches.find(w=>w.id===f.watch_id)||{}).latest;
   const feeCustom=f.change_fee!=null&&!FEE_OPTS.some(o=>o[0]===String(f.change_fee));
-  $("#crewDetail").innerHTML=`<div class="detail-head"><h2>✎ ${esc(f.flight_no||'')} 出票信息</h2>
+  $("#crewDetail").innerHTML=`<button class="dback" onclick="showMember(${mid})">← 返回成员</button>
+    <div class="detail-head"><h2>✎ ${esc(f.flight_no||'')} 出票信息</h2>
       <span class="badge">${esc(m.name)}</span></div>
     <div class="kv"><span>${esc(f.date||'')}</span>
       <span>${esc([f.from_name||f.from_code,f.to_name||f.to_code].filter(Boolean).join(" → "))}</span>
@@ -1296,7 +1300,7 @@ async function delMember(id){
   const m=CREW.find(x=>x.id===id)||{};
   if(!await confirmDialog("确认删除该成员及其航段？此操作不可撤销。",{title:"删除成员",okText:"删除",danger:true}))return;
   try{await gapi(`/api/members/${id}`,{method:"DELETE"},`删除成员 ${m.name||"#"+id}`);
-    curMember=null;$("#crewDetail").innerHTML=`<div class="empty">已删除</div>`;await loadCrew();}
+    curMember=null;closeDrawer();$("#crewDetail").innerHTML=`<div class="empty">已删除</div>`;await loadCrew();}
   catch(e){toast("失败："+e.message,false);}}
 
 /* ---- 🔐 TOTP 绑定：闸门的钥匙。密钥只在这一次响应里出现，不落盘、不进快照。 ---- */
@@ -1308,7 +1312,8 @@ async function totpPanel(mid){
   const g=(TOTP||{}).enabled;
   const state=t.bound_at?`<span class="badge appr">✅ 已绑定</span> <span class="hint">${esc(t.bound_at)}</span>`
     :(t.has_secret?`<span class="badge pend">⏳ 已发密钥，等一次验码</span>`:`<span class="badge">未绑定</span>`);
-  $("#crewDetail").innerHTML=`<div class="detail-head"><h2>🔐 ${esc(m.name||"")} 的二次验证</h2></div>
+  $("#crewDetail").innerHTML=`<button class="dback" onclick="showMember(${mid})">← 返回成员</button>
+    <div class="detail-head"><h2>🔐 ${esc(m.name||"")} 的二次验证</h2></div>
     <div class="kv"><span>状态 <b>${state}</b></span><span>闸门 <b>${g?"已生效":"未生效"}</b></span></div>
     <div class="plan-box">绑定后，这些操作要多敲一次 6 位码：<br>
       ${((TOTP||{}).guarded||[]).map(x=>"· "+esc(x)).join("<br>")}<br>
@@ -1364,7 +1369,8 @@ function showRegForm(local){
   const mail="autrip@agent.qq.com";
   if(PREVIEW){$("#crewDetail").innerHTML=`<div class="empty">📖 线上为只读视图<br>
     <span class="hint">如需加入或修改信息，发邮件到 ${mail} 说明即可。</span></div>`;return;}
-  $("#crewDetail").innerHTML=`<div class="detail-head"><h2>📝 ${local?"新增成员":"注册报文"}</h2></div>
+  $("#crewDetail").innerHTML=`<button class="dback" onclick="closeDrawer()">← 返回</button>
+    <div class="detail-head"><h2>📝 ${local?"新增成员":"注册报文"}</h2></div>
     <p style="color:var(--muted);font-size:13px">填完可直接入库为<b>待审核</b>，
       或生成一段报文转给别人/存档。审核通过后才会在线上显示完整信息。</p>
     <div class="form-grid">
@@ -1392,6 +1398,7 @@ function showRegForm(local){
     try{const r=await api("/api/members/register",{method:"POST",headers:{"Content-Type":"application/json"},
       body:JSON.stringify({payload:payload()})});toast(r.created?`已建待审核：${r.name}`:`已存在同名：${r.name}`);
       await loadCrew();}catch(e){toast("失败："+e.message,false);}};
+  openDrawer("#crewDetail");   // 入口在列表上（＋新增成员 / 注册报文）：手机上不弹出来，这张表就画在隐藏的抽屉里、点了看不见
 }
 
 /* ---- 💰 账单：线上是信封加密的密文，输入口令后在浏览器里用 WebCrypto 解 ----
@@ -1463,7 +1470,7 @@ function renderBill(L,grant){
     <span class="price ${v>=0?'good':''}">${v>=0?'应收':'应付'} ¥${Math.abs(v).toFixed(2)}</span></div>`).join("");
   const set=(L.settlement||[]).map(s=>`<div class="opt"><span>${esc(s.from_name)} → ${esc(s.to_name)}</span>
     <span class="price">¥${s.amount_cny.toFixed(2)}</span></div>`).join("")||`<div class="hint">已结清</div>`;
-  $("#billMain").innerHTML=`<button id="detailBack" onclick="$('#billMain').classList.remove('open')">← 返回</button>
+  $("#billMain").innerHTML=`
     <div class="detail-head"><h2>💰 账单</h2>${grant?`<span class="badge appr">${esc(grant.hint)}·${esc(grant.role)}</span>`:''}</div>
     <div class="cdown"><div style="color:var(--muted);font-size:12px">总支出（按记账当日汇率折 CNY）</div>
       <div class="cdown-n">¥${(b.total_cny||0).toFixed(2)}</div></div>
@@ -1473,7 +1480,8 @@ function renderBill(L,grant){
       <div style="overflow:auto"><table class="fltab"><thead><tr><th>日期</th><th>项目</th><th>类别</th>
       <th class="num">原币</th><th class="num">折CNY</th><th>付款人</th><th>分摊</th></tr></thead>
       <tbody>${rows||'<tr><td colspan="7">暂无账目</td></tr>'}</tbody></table></div></fieldset>`;
-  if(isMobile())$("#billMain").classList.add("open");
+  // 账单页不是"列表→详情"结构（左侧只有操作按钮，没有可点的条目），所以**不用抽屉**：
+  // 手机上直接铺在页面里。若套用抽屉，账单会被藏起来，且没有任何入口能把它打开。
 }
 const SPLIT_TXT={equal:"均摊",shares:"按份额",exact:"指定金额"};
 /* 下拉优先：能枚举的一律用 select，少让人手打、也少打错 */
@@ -1677,7 +1685,7 @@ function renderReflect(r,runs){
       ${x.detail?`<div class="fd">${x.detail}</div>`:''}</div>`;}).join("");
   const hist=(runs&&runs.length)?`<div class="rf-hist"><b>历次自省（最近 ${runs.length}）</b>${runs.map(h=>`<div class="runrow"><span>${(h.created_at||'').replace('T',' ')}</span><span>🔴${h.n_critical} 🟡${h.n_warn} 🔵${h.n_info} ${h.notified?'📮':''}</span></div>`).join("")}</div>`:'';
   $("#reflectBody").innerHTML=head+items+hist;
-  document.querySelectorAll(".finding.jump").forEach(el=>el.onclick=()=>{switchTab("monitor");selectWatch(+el.dataset.wid);});
+  document.querySelectorAll(".finding.jump").forEach(el=>el.onclick=()=>{switchTab("monitor");selectWatch(+el.dataset.wid,true);});
 }
 async function runReflect(){toast("自省巡检中…");try{const r=await api("/api/reflect/run",{method:"POST"});
   toast(`自省完成 🔴${r.n_critical} 🟡${r.n_warn} 🔵${r.n_info}${r.notified?' · 已推送':''}`);loadReflect();}
@@ -2331,16 +2339,49 @@ function renderList(){
     for(const w of arr)html+=cardHtml(w);
   }
   $("#list").innerHTML=html||`<div class="empty" style="margin-top:30px">没有匹配的监测项</div>`;
-  document.querySelectorAll(".card").forEach(c=>c.onclick=()=>selectWatch(+c.dataset.id));
+  document.querySelectorAll(".card").forEach(c=>c.onclick=()=>selectWatch(+c.dataset.id,true));
 }
 ["fltPlan","fltType","fltBuy","fltSort"].forEach(id=>{const el=$("#"+id);if(el)el.onchange=renderList;});
 const isMobile=()=>window.matchMedia("(max-width:640px)").matches;
-function closeDetail(){$("#detail").classList.remove("open");}
-async function selectWatch(id){
+/* ---- 统一详情抽屉：今日 / 监测 / 同行共用 ----
+   规则只有一条：**用户点选才弹出，程序性重绘不弹**。手机上全屏覆盖，返回按钮与系统返回键
+   （安卓返回、iOS 侧滑、浏览器后退）都能回到列表；桌面宽度下是左右双栏，抽屉不生效。 */
+var _drawer=null;                                 // 当前打开的抽屉（用 var：避免早于定义被调用时的 TDZ）
+var _backPending=false;                           // 自己调了 history.back()，popstate 还没回来
+function openDrawer(sel){
+  const e=document.querySelector(sel);
+  if(!e||!isMobile())return;
+  if(_drawer&&_drawer!==sel){const o=document.querySelector(_drawer);if(o)o.classList.remove("open");}
+  e.classList.add("open");e.scrollTop=0;
+  // 占一格历史：系统返回键先关抽屉，而不是直接离开页面。
+  // 上一次关抽屉的 back 还在路上时先不占、等它回来再补（见 popstate）——否则那个迟到的 popstate
+  // 会把刚打开的抽屉又关掉（切页签会关旧抽屉，紧接着代码又开新抽屉时就是这个时序）
+  if(!_drawer&&!_backPending)history.pushState({drawer:sel},"");
+  _drawer=sel;
+}
+function closeDrawer(fromPop){
+  if(!_drawer)return;
+  const e=document.querySelector(_drawer);if(e)e.classList.remove("open");
+  _drawer=null;
+  // 用按钮 / 切页签关时，把那格历史也退掉（已在退的就别再退一次，否则会直接离开页面）
+  if(!fromPop&&!_backPending&&history.state&&history.state.drawer){_backPending=true;history.back();}
+}
+window.addEventListener("popstate",()=>{
+  if(_backPending){                               // 自己发起的 back 回来了
+    _backPending=false;
+    if(_drawer)history.pushState({drawer:_drawer},"");   // 等待期间又开了抽屉：此刻补占那格历史
+    return;
+  }
+  if(_drawer)closeDrawer(true);                   // 用户按了系统返回键 / 侧滑返回
+});
+function closeDetail(){closeDrawer();}            // 兼容旧调用（删除监测项等）
+// open=true 只给用户点选用（点卡片 / 自省页跳转 / ?w= 深链）。抓价完成、改目标价、保存表单后的
+// 重绘都不传——抽屉维持原状，否则用户已退回列表时，后台抓价一结束又会把详情弹到脸上。
+async function selectWatch(id,open){
   selectedId=id;renderList();
   const w=watches.find(x=>x.id===id);
   const[prices,alerts]=await Promise.all([api(`/api/watches/${id}/prices`),api(`/api/watches/${id}/alerts`)]);
-  renderDetail(w,prices,alerts);
+  renderDetail(w,prices,alerts,open);
 }
 function parseOptions(prices){if(!prices.length)return[];try{return(JSON.parse(prices[prices.length-1].raw||"{}").options)||[];}catch{return[];}}
 function parseRaw(prices){if(!prices.length)return{};try{return JSON.parse(prices[prices.length-1].raw||"{}");}catch{return{};}}
@@ -2368,13 +2409,13 @@ async function renderXQuotes(w,lp){
       ${r.url?`<br><a href="${r.url}" target="_blank" rel="noopener">去看房型 ↗</a>`:''}</span></div>`).join("")}
     </fieldset>`;
 }
-function renderDetail(w,prices,alerts){
+function renderDetail(w,prices,alerts,open){
   const lp=prices.length?prices[prices.length-1]:null,opts=parseOptions(prices);
   const optLegend=w.type==='hotel'?`🏨 备选酒店 Top-${opts.length}（锁房参考：低价被订走就看次低）`:`本次 Top-${opts.length} 备选`;
   const optHtml=opts.length?`<fieldset><legend>${optLegend}</legend>${opts.map(o=>`<div class="opt"><span>${o.detail||''}</span><span class="price">${fmt(o.price)}</span></div>`).join("")}</fieldset>`:"";
   const alertHtml=alerts.length?`<fieldset><legend>告警历史（最近${alerts.length}）</legend>${alerts.map(a=>`<div class="opt"><span>${a.sent_at} ${a.ok?'✅':'⚠️'}</span><span class="price">${fmt(a.price)}</span></div>`).join("")}</fieldset>`:"";
   const[pcls,plabel]=PLAN_META[planKey(w)]||PLAN_META[""];
-  $("#detail").innerHTML=`<button id="detailBack" onclick="closeDetail()">← 返回列表</button>
+  $("#detail").innerHTML=`<button class="dback" onclick="closeDrawer()">← 返回列表</button>
     <div class="detail-head"><span class="badge ${w.type}">${TYPE_LABEL[w.type]}</span>
     <span class="badge ${pcls}">${plabel}</span>
     ${isRT(w)?'<span class="badge rt">往返</span>':''}${w.transport_no?'<span class="badge hx">指定航班</span>':''}${isDirect(w)?'<span class="badge direct">仅直飞</span>':''}<h2>${w.name}</h2></div>
@@ -2396,7 +2437,7 @@ function renderDetail(w,prices,alerts){
       <label>出行/入住日<input id="m_date" placeholder="2026-10-02"/></label></div>
       <div class="actions"><button class="primary" onclick="addManual(${w.id})">保存</button></div></fieldset>`}`;
   // 手动录价表单在只读预览里是死代码（入口按钮已隐藏），整块不渲染，别留可点的写操作元素
-  if(isMobile()){$("#detail").classList.add("open");$("#detail").scrollTop=0;}  // 抽屉弹出后再画图，确保容器有宽度
+  if(open)openDrawer("#detail");  // 先弹出抽屉再画图，确保图表容器有宽度（所以监测页在这里开，不挪到点击处）
   const ts=$("#tgtSpan");
   if(ts)ts.onclick=()=>{                             // 目标价行内编辑：点击→输入框→回车/失焦保存
     ts.onclick=null;
@@ -2580,7 +2621,7 @@ async function loadPlanChip(){
 }
 (async()=>{ if(PREVIEW){await loadSnapshot();if(!(SNAP||{})._fromCache)checkStale();} switchTab("today"); skeleton(); await refresh(); loadAppVersion(); loadPlanChip(); pollJobBar();
   const w=+new URLSearchParams(location.search).get("w");   // 深链 ?w=<id> 直达某监测项（移动端亦可分享）
-  if(w&&watches.some(x=>x.id===w))selectWatch(w);
+  if(w&&watches.some(x=>x.id===w))selectWatch(w,true);
 })();
 </script>
 </body>
