@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="zh-CN">
 <head>
-<script>window.PREVIEW=true;window.BUILD="20260920232635"</script>
+<script>window.PREVIEW=true;window.BUILD="20260921011238"</script>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
 <title>2026·10 澳洲行 · 行程与价格监测</title>
@@ -189,6 +189,21 @@
   .pp-k{color:var(--muted);min-width:82px;flex:none}
   .p-note{color:var(--warn);font-size:12px;margin-top:9px;line-height:1.6}
   .p-actions{display:flex;gap:8px;margin-top:13px}
+  /* 这个操作属于哪个面、AI 能不能直接写——以后端登记表为准，前端只如实显示 */
+  .p-policy{display:flex;align-items:center;gap:9px;flex-wrap:wrap;margin-top:10px}
+  .p-pol{font-size:11.5px;padding:2px 10px;border-radius:999px;border:1px solid var(--line)}
+  .p-pol.direct{background:var(--good-bg);color:var(--good);border-color:var(--good)}
+  .p-pol.propose{background:var(--warn-bg);color:var(--warn);border-color:var(--warn-bd)}
+  .p-done{margin-top:13px;background:var(--panel2);border:1px solid var(--line);border-radius:10px;
+    padding:10px 12px;font-size:13px;display:flex;align-items:center;gap:10px}
+  /* 最近 AI 改动（留痕账本） */
+  .chg{display:flex;align-items:flex-start;gap:10px;background:var(--panel);border:1px solid var(--line);
+    border-radius:10px;padding:9px 12px;margin-bottom:7px;box-shadow:var(--shadow-1)}
+  .chg.undone{opacity:.62}
+  .chg.undone .chg-t{text-decoration:line-through;color:var(--muted)}
+  .chg-t{flex:1;font-size:13px;line-height:1.5;min-width:0}
+  .chg-meta{color:var(--muted);font-size:11px;margin-top:3px;font-variant-numeric:tabular-nums}
+  .chg-undo{flex:none;font-size:12px;padding:5px 11px}
   .memo{display:flex;align-items:center;gap:11px;background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:9px 12px;margin-bottom:7px;box-shadow:var(--shadow-1)}
   .memo.done .memo-t{text-decoration:line-through;color:var(--muted)}
   .memo input[type=checkbox]{accent-color:var(--good);flex:none}
@@ -727,6 +742,11 @@
     <div id="mdlBar" class="mdl-bar"></div>
     <div id="jobPanel"></div>
     <div id="memoList"></div>
+    <div class="shead" style="margin-top:26px"><span class="bar"></span>🧾 最近 AI 改动<span class="cnt" id="chgCnt"></span>
+      <button id="chgRefresh" class="proc-btn">↻ 刷新</button></div>
+    <div class="intake-note" style="margin-top:8px">AI 每改一次库里的东西都记在这儿，连同「改之前是什么样」；
+      点「撤销」按原样还原。改文件那类（行程正文）走 git 提交，不在这张表里。</div>
+    <div id="aiChanges"></div>
     <details class="usage-box" id="usageBox"><summary>📊 Claude 用量<span class="ug-sum" id="ugSum"></span></summary>
       <div id="usageBody"></div></details>
   </div>
@@ -1031,7 +1051,9 @@ const GROUPS=[
   {k:"itin",   views:[["itin","正文"],["glance","速览"],["shop","买在澳洲"]]},
   {k:"monitor",views:[["monitor","价格与决策"]]},
   {k:"intake", views:[["intake","录入"]]},
-  {k:"crew",   views:[["crew","同行"],["bill","账单"]]},
+  /* 账单 / 分账已停用（用户 2026-09-21）：页签摘掉，端点也会 410。视图标记留着，
+     将来设 LEDGER_ENABLED=1 恢复时把 ["bill","账单"] 加回来即可。 */
+  {k:"crew",   views:[["crew","同行"]]},
   {k:"reflect",views:[["reflect","自省"]]},
 ];
 const _groupOf=v=>(GROUPS.find(g=>g.views.some(x=>x[0]===v))||{}).k;
@@ -1597,7 +1619,7 @@ const TICKET_CK=[["已出票 · 立即核对",[
   ["cash","换汇（AUD 现金少量即可，澳洲刷卡普及）+ 手机流量/eSIM"],
   ["copy","护照/签证/保单/订座号离线留存一份"]]],
  ["回来后",[
-  ["bill","💰 账单结清 —— 「账单」页看结算方案（最少转账笔数）"],
+  ["bill","💰 各自把账算清（分账功能已停用，线下对一下即可）"],
   ["rec","监测项停用或清目标价，避免继续误报"]]]];
 function renderTicketCk(){
   let saved={};try{saved=JSON.parse(localStorage.getItem("ticket_ck")||"{}");}catch{}
@@ -1968,7 +1990,46 @@ async function refreshShopping(){
 /* ---- 🤖 AI 录入：自然语言 → 提案 → 确认 → 落库（本地专用） ---- */
 const INTENT_CN={day_item:"加行程条目",watch_target:"改目标价",watch_add:"加监测项",memo:"记备忘"};
 let _proposal=null;
+/* ---------- AI 写入：登记表 + 最近改动（后端 ai_ops.py） ----------
+   哪些面 AI 能直接写、哪些只出方案，**以后端登记表为准**——前端只如实显示，不自己判断，
+   否则两处口径迟早不一致（后端仍会独立再判一次，前端显示错也不会写成）。*/
+let _OPS=null;
+async function loadOps(){
+  if(_OPS)return _OPS;
+  try{_OPS=await api("/api/ai/ops");}catch(e){_OPS={ops:[],surfaces:{},aliases:{}};}
+  return _OPS;
+}
+function opOf(intent){                       // 提案里存的是旧 intent 名 → 映射到登记表里的操作
+  const o=_OPS||{},key=(o.aliases||{})[intent]||intent;
+  return (o.ops||[]).find(x=>x.op===key)||null;
+}
+async function undoChange(cid,btn){
+  if(btn){btn.disabled=true;btn.textContent="撤销中…";}
+  try{const r=await api(`/api/ai/changes/${cid}/undo`,{method:"POST"});
+    toast((r&&r.message)||(r&&r.ok?"已撤销":"撤销失败"),!!(r&&r.ok));
+  }catch(e){toast("撤销失败："+(e.message||e),false);}
+  await loadAiChanges();renderMemos();
+}
+async function loadAiChanges(){
+  const el=$("#aiChanges");if(!el||PREVIEW)return;
+  let rows=[];
+  try{rows=await api("/api/ai/changes?limit=15")||[];}
+  catch(e){el.innerHTML=`<div class="empty">读不到改动记录：${esc(e.message||e)}</div>`;return;}
+  const cnt=$("#chgCnt");
+  if(cnt)cnt.textContent=rows.length?`${rows.filter(r=>!r.undone_at).length} 条生效 / 共 ${rows.length}`:"";
+  if(!rows.length){el.innerHTML=`<div class="empty" style="margin-top:14px">还没有 AI 改过库里的东西</div>`;return;}
+  el.innerHTML=rows.map(r=>`<div class="chg ${r.undone_at?"undone":""}">
+    <div class="chg-t">${esc(r.summary||"")}
+      <div class="chg-meta">${esc(String(r.ts||"").slice(5,16).replace("T"," "))} · ${esc(r.source||"")} · ${esc(r.op||"")}${
+        r.undone_at?` · 已于 ${esc(String(r.undone_at).slice(5,16).replace("T"," "))} 撤销`:""}</div></div>
+    ${r.undone_at?""                                   /* 改文件那类只记账：回退归 git，别给撤销按钮 */
+      :(r.undoable?`<button class="chg-undo" data-c="${r.id}">↩ 撤销</button>`
+                  :`<span class="chg-meta" style="flex:none">文件改动 · 见 git</span>`)}</div>`).join("");
+  el.querySelectorAll(".chg-undo").forEach(b=>b.onclick=()=>undoChange(b.dataset.c,b));
+}
 function loadIntake(){
+  loadOps();loadAiChanges();                 // 登记表（缓存一次）与「最近 AI 改动」面板
+  const cr=$("#chgRefresh");if(cr)cr.onclick=loadAiChanges;
   const b=$("#intakeParseBtn");if(b)b.onclick=intakeParse;
   const c=$("#intakeClearBtn");if(c)c.onclick=()=>{$("#intakeText").value="";$("#intakeProposal").innerHTML="";_proposal=null;};
   const ta=$("#intakeText");if(ta)ta.onkeydown=e=>{if((e.metaKey||e.ctrlKey)&&e.key==="Enter")intakeParse();};
@@ -2214,25 +2275,47 @@ function renderProposal(p){
   const el=$("#intakeProposal");if(!p){el.innerHTML="";return;}
   const rows=Object.entries(p.params||{}).filter(([k])=>k!=="text"||p.intent==="memo")
     .map(([k,v])=>`<div class="pp-row"><span class="pp-k">${esc(k)}</span><span>${esc(v==null?"":String(v))}</span></div>`).join("");
+  const spec=opOf(p.intent);                      // 登记表里这个操作属于哪个面、能不能直接写
+  const direct=!spec||spec.policy==="direct";     // 表里没有的（老提案）按可执行走，后端仍会独立再判一次
+  const pol=spec?`<div class="p-policy">
+      <span class="p-pol ${direct?"direct":"propose"}">${direct?"✅ 确认后可直接写":"📋 只出方案，不代改"}</span>
+      <span class="p-conf">${esc(spec.surface_cn)}${direct&&spec.undoable?" · 可撤销":""}</span></div>`:"";
   el.innerHTML=`<div class="proposal ${esc(p.intent)}">
-    <div class="p-head"><span class="p-tag">${esc(INTENT_CN[p.intent]||p.intent)}</span>
+    <div class="p-head"><span class="p-tag">${esc((spec&&spec.label)||INTENT_CN[p.intent]||p.intent)}</span>
       <span class="p-conf">置信度 ${Math.round((p.confidence||0)*100)}%</span></div>
     <div class="p-summary">${esc(p.summary||"")}</div>
     ${rows?`<div class="p-params">${rows}</div>`:""}
     ${p.note?`<div class="p-note">⚠️ ${esc(p.note)}</div>`:""}
-    <div class="p-actions"><button class="primary" id="intakeApplyBtn">✅ 确认执行</button>
+    ${pol}
+    <div class="p-actions">${direct
+      ?`<button class="primary" id="intakeApplyBtn">✅ 确认执行</button>`
+      :`<button class="primary" id="intakeMemoBtn">📥 记成备忘（待人工处理）</button>`}
       <button id="intakeCancelBtn">取消</button></div></div>`;
-  $("#intakeApplyBtn").onclick=intakeApply;
+  const ab=$("#intakeApplyBtn");if(ab)ab.onclick=intakeApply;
+  // 只出方案的面（同行 / 账单）：不给"执行"，转成一条备忘，人自己去那一页动手
+  const mb=$("#intakeMemoBtn");if(mb)mb.onclick=()=>{
+    const t=(p.summary||p._raw||"")+"（AI 不代改，需人工到对应页面处理）";
+    _proposal={intent:"memo",params:{text:t},summary:t,confidence:1};
+    intakeApply();};
   $("#intakeCancelBtn").onclick=()=>{el.innerHTML="";_proposal=null;};
 }
 async function intakeApply(){
   if(!_proposal)return;
-  const b=$("#intakeApplyBtn");b.disabled=true;b.textContent="执行中…";
+  const b=$("#intakeApplyBtn")||$("#intakeMemoBtn");
+  const label=b?b.textContent:"";
+  if(b){b.disabled=true;b.textContent="执行中…";}
   try{const r=await api("/api/intake/apply",{method:"POST",headers:{"Content-Type":"application/json"},
       body:JSON.stringify({intent:_proposal.intent,params:_proposal.params||{}})});
-    if(r&&r.ok){toast(r.message||"已执行");$("#intakeProposal").innerHTML="";$("#intakeText").value="";_proposal=null;renderMemos();}
-    else{toast((r&&r.message)||"执行失败",false);b.disabled=false;b.textContent="✅ 确认执行";}
-  }catch(e){toast("执行失败："+(e.message||e),false);b.disabled=false;b.textContent="✅ 确认执行";}
+    if(r&&r.ok){
+      toast(r.message||"已执行");$("#intakeText").value="";_proposal=null;renderMemos();loadAiChanges();
+      // 不直接清空：留一张"刚做了什么 + 撤销"的小卡，手机上也不用滚到下面的账本里找
+      $("#intakeProposal").innerHTML=`<div class="p-done"><span style="flex:1">✅ ${esc(r.message||"已执行")}</span>
+        ${r.undoable&&r.change_id?`<button class="chg-undo" id="undoLast" data-c="${r.change_id}">↩ 撤销</button>`:""}</div>`;
+      const ub=$("#undoLast");
+      if(ub)ub.onclick=async()=>{await undoChange(ub.dataset.c,ub);$("#intakeProposal").innerHTML="";};
+    }
+    else{toast((r&&r.message)||"执行失败",false);if(b){b.disabled=false;b.textContent=label;}}
+  }catch(e){toast("执行失败："+(e.message||e),false);if(b){b.disabled=false;b.textContent=label;}}
 }
 
 /* ---------- 📊 用量 ---------- */
