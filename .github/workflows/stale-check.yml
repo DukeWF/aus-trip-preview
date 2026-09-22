@@ -17,7 +17,7 @@ jobs:
         id: check
         run: |
           set -e
-          gen=$(curl -sf --max-time 30 https://trip.surl.cf/snapshot.json | \
+          gen=$(curl -sf --max-time 30 https://trip.surl.ccwu.cc/snapshot.json | \
                 python3 -c "import sys,json;print(json.load(sys.stdin)['meta']['generated_at'])")
           echo "generated_at=$gen"
           age_h=$(python3 - "$gen" <<'EOF'
@@ -39,5 +39,5 @@ jobs:
         run: |
           [ -z "$HOOK" ] && { echo "未配置 FEISHU_WEBHOOK，仅靠 GitHub 失败邮件"; exit 0; }
           curl -sf --max-time 20 -H 'Content-Type: application/json' -d \
-            "{\"msg_type\":\"text\",\"content\":{\"text\":\"🚨 澳洲行监测停摆拨测：trip.surl.cf 数据已 ${{ steps.check.outputs.age_h }} 小时未更新（正常≤6h）。本机(抓价电脑)可能停机/断网/任务失效，请检查。\"}}" \
+            "{\"msg_type\":\"text\",\"content\":{\"text\":\"🚨 澳洲行监测停摆拨测：trip.surl.ccwu.cc 数据已 ${{ steps.check.outputs.age_h }} 小时未更新（正常≤6h）。本机(抓价电脑)可能停机/断网/任务失效，请检查。\"}}" \
             "$HOOK"
