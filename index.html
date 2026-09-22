@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="zh-CN">
 <head>
-<script>window.PREVIEW=true;window.BUILD="20260922172659"</script>
+<script>window.PREVIEW=true;window.BUILD="20260922212352"</script>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
 <title>2026·10 澳洲行 · 行程与价格监测</title>
@@ -766,7 +766,7 @@
 <!-- ===== 速览 ===== -->
 <div class="view" id="view-glance"><div class="glance">
   <div class="glance-poster"><img id="glanceImg" alt="速览海报（加载中…）"/>
-    <div class="qrbox"><img id="qrImg" alt="二维码"/><div>📱 扫码打开在线版<br><b>trip.surl.cf</b><br>发给同行人 · 可添加到主屏</div></div>
+    <div class="qrbox"><img id="qrImg" alt="二维码"/><div>📱 扫码打开在线版<br><b>trip.surl.ccwu.cc</b><br>发给同行人 · 可添加到主屏</div></div>
   </div>
   <div class="glance-side" id="glanceResearch">加载中…</div>
 </div></div>
@@ -1591,7 +1591,7 @@ async function grantForm(){
       $("#gCopy").onclick=()=>navigator.clipboard.writeText(r.passphrase).then(()=>toast("已复制"));
       $("#gMail").onclick=()=>{const m=CREW.find(x=>x.id===r.member_id)||{};
         location.href=`mailto:${m.contact||""}?subject=${encodeURIComponent("澳洲行 账单口令")}&body=${encodeURIComponent(
-          `你的账单口令：${r.passphrase}\n\n在 https://trip.surl.cf 的「💰 账单」页输入即可查看。\n口令只发这一次，请妥善保存；丢失可让发起人重置。`)}`;};
+          `你的账单口令：${r.passphrase}\n\n在 https://trip.surl.ccwu.cc 的「💰 账单」页输入即可查看。\n口令只发这一次，请妥善保存；丢失可让发起人重置。`)}`;};
       const sy=$("#gSync");if(sy)sy.textContent="线上同步："+(r.synced||"—");
       toast("已生成并同步线上");}
     catch(e){toast("失败："+e.message,false);}};
