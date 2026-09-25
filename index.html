@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="zh-CN">
 <head>
-<script>window.PREVIEW=true;window.BUILD="20260926015713"</script>
+<script>window.PREVIEW=true;window.BUILD="20260926021918"</script>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
 <title>2026·10 澳洲行 · 行程与价格监测</title>
@@ -429,6 +429,33 @@
   .doc pre{background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:12px;overflow:auto}
   .doc blockquote{border-left:3px solid var(--accent);margin:10px 0;padding:2px 14px;color:var(--muted)}
   .doc a{color:var(--accent)}
+  /* ---- 变更：行程变更时间线（竖线 + 圆点；结构性变更用大圆点和醒目色；点一行原地展开原文） ---- */
+  .cl-wrap{max-width:860px;margin:0 auto;padding:8px 4px 28px}
+  .cl-stats{color:var(--fg2);font-size:13px;margin:6px 0 4px}
+  .cl-month{font-weight:600;color:var(--fg2);font-size:13px;margin:18px 0 8px 24px}
+  .cl-group{position:relative;padding-left:24px}
+  .cl-group::before{content:"";position:absolute;left:8px;top:6px;bottom:6px;width:2px;background:var(--line)}
+  .cl-item{position:relative;background:var(--panel);border:1px solid var(--line);border-radius:var(--r);
+    margin:0 0 8px;box-shadow:var(--shadow-1)}
+  .cl-item::before{content:"";position:absolute;left:-20px;top:15px;width:10px;height:10px;border-radius:50%;
+    background:var(--accent);box-shadow:0 0 0 3px var(--bg)}
+  .cl-item.major::before{left:-22px;top:13px;width:14px;height:14px;background:var(--warn)}
+  .cl-row{display:flex;flex-wrap:wrap;align-items:baseline;gap:4px 10px;padding:10px 34px 10px 12px;
+    cursor:pointer;user-select:none;position:relative}
+  .cl-ver{font-weight:600;color:var(--accent);font-variant-numeric:tabular-nums}
+  .cl-item.major .cl-ver{color:var(--warn)}
+  .cl-date{color:var(--muted);font-size:12px;font-variant-numeric:tabular-nums}
+  .cl-title{flex:1 1 220px;min-width:0;font-weight:500;overflow-wrap:anywhere}
+  .cl-caret{position:absolute;right:12px;top:9px;color:var(--muted);transition:transform .15s}
+  .cl-item.open .cl-caret{transform:rotate(90deg)}
+  .cl-chips{display:flex;flex-wrap:wrap;gap:4px;flex:1 1 100%}
+  .cl-chip{font-size:11px;padding:1px 7px;border-radius:10px;background:var(--panel2);color:var(--fg2);
+    border:1px solid var(--line)}
+  .cl-chip.major{background:var(--warn-bg);color:var(--warn);border-color:var(--warn-bd)}
+  .cl-body{display:none;border-top:1px solid var(--line-soft);overflow-x:auto;overflow-wrap:anywhere}
+  .cl-body.doc{padding:4px 14px 12px;max-width:none;margin:0}
+  .cl-item.open .cl-body{display:block}
+  .cl-body table{display:block;overflow-x:auto;max-width:100%}
   /* ---- 路线图 ---- */
   .mapwrap{max-width:1000px;margin:0 auto;padding:24px}
   .mapwrap img{width:100%;border:1px solid var(--line);border-radius:14px;background:var(--panel2)}
@@ -763,6 +790,14 @@
   <div class="doc" id="doc">加载中…</div>
 </div>
 
+<!-- ===== 变更（行程变更时间线：数据 = itinerary/CHANGELOG.md 解析结果） ===== -->
+<div class="view" id="view-changes">
+  <div class="cl-wrap">
+    <div class="cl-stats" id="clStats"></div>
+    <div id="clList">加载中…</div>
+  </div>
+</div>
+
 <!-- ===== 速览 ===== -->
 <div class="view" id="view-glance"><div class="glance">
   <div class="glance-poster"><img id="glanceImg" alt="速览海报（加载中…）"/>
@@ -875,6 +910,7 @@ function snapGet(u){                             // 把 GET /api/* 映射到 sna
   if(u==="/api/reflect/runs")return s.reflect_runs||[];
   if(u==="/api/runs")return s.runs||[];
   if(u==="/api/itinerary")return s.itinerary||{markdown:""};
+  if(u==="/api/changelog")return s.changelog||{entries:[],stats:{}};
   if(u==="/api/members")return s.members||[];
   if(u==="/api/days")return s.days||[];
   if(u==="/api/weather")return s.weather||{};
@@ -1048,7 +1084,7 @@ if("serviceWorker" in navigator){window.addEventListener("load",()=>navigator.se
    现在按"这是同一件事的不同面"归组，组内切换走二级条。 */
 const GROUPS=[
   {k:"today",  views:[["today","今日"]]},
-  {k:"itin",   views:[["itin","正文"],["glance","速览"],["shop","买在澳洲"]]},
+  {k:"itin",   views:[["itin","正文"],["changes","变更"],["glance","速览"],["shop","买在澳洲"]]},
   {k:"monitor",views:[["monitor","价格与决策"]]},
   {k:"intake", views:[["intake","录入"]]},
   /* 账单 / 分账已停用（用户 2026-09-21）：页签摘掉，端点也会 410。视图标记留着，
@@ -1098,6 +1134,7 @@ function switchTab(name){
   if(name==="shop")loadShopping();
   if(name==="intake")loadIntake();
   if(name==="itin")loadItinerary();
+  if(name==="changes")loadChanges();
   if(name==="glance"){if(!PREVIEW){$("#genCard").onclick=genCard;$("#runResearch").onclick=runResearch;}loadGlance();}
   if(name==="plan")loadPlan();
 }
@@ -1637,6 +1674,42 @@ async function loadItinerary(){
   renderTicketCk();
   try{const d=await api("/api/itinerary");$("#doc").innerHTML=marked.parse(d.markdown||"");}
   catch(e){$("#doc").innerHTML="加载失败："+e.message;}
+  // 正文里写的是相对链接 [CHANGELOG.md](CHANGELOG.md)——站点上没有这个文件，点了就是 404；改成切到「变更」页
+  $("#doc").querySelectorAll('a[href$="CHANGELOG.md"]').forEach(a=>a.onclick=ev=>{ev.preventDefault();switchTab("changes");});
+}
+
+/* ---- 变更：行程变更时间线（数据 = itinerary/CHANGELOG.md 解析结果，线上走快照同名字段） ---- */
+let _cl=null;
+async function loadChanges(){
+  const box=$("#clList");
+  try{_cl=await api("/api/changelog");}catch(e){box.innerHTML="加载失败："+esc(e.message);return;}
+  const es=(_cl&&_cl.entries)||[],st=(_cl&&_cl.stats)||{};
+  $("#clStats").textContent=es.length?`共 ${st.count} 版 · 结构性变更 ${st.n_major} 次 · 最近一次 ${(st.last_date||"").slice(5)}（${st.latest}）· 点任意一行看详情`:"";
+  if(!es.length){box.innerHTML=`<div class="empty">暂无变更记录</div>`;return;}
+  const groups=[];                                   // 按月分组，保持文件顺序（新的在上）
+  es.forEach((e,i)=>{const k=(e.date||"").slice(0,7)||"其他";let g=groups[groups.length-1];
+    if(!g||g.k!==k){g={k,items:[]};groups.push(g);}g.items.push(i);});
+  box.innerHTML=groups.map(g=>{const m=g.k.split("-")[1];
+    return `<div class="cl-month">${m?(+m)+" 月":"其他"} · ${g.items.length} 个版本</div>`
+      +`<div class="cl-group">${g.items.map(i=>clRow(es[i],i)).join("")}</div>`;}).join("");
+  box.querySelectorAll(".cl-row").forEach(r=>r.onclick=()=>toggleCl(r.parentElement));
+}
+function clRow(e,i){
+  const chips=[...(e.major?[`<span class="cl-chip major">结构性</span>`]:[]),
+    ...(e.days||[]).slice(0,4).map(d=>`<span class="cl-chip">Day${d}</span>`),
+    ...(e.sections||[]).slice(0,4).map(s=>`<span class="cl-chip">${esc(s)}</span>`),
+    ...(e.backfilled?[`<span class="cl-chip">补记</span>`]:[])].join("");
+  return `<div class="cl-item${e.major?" major":""}" data-i="${i}"><div class="cl-row">`
+    +`<span class="cl-ver">${esc(e.version||"—")}</span>`
+    +`<span class="cl-date">${esc((e.date||"").slice(5))}${e.note?"（"+esc(e.note)+"）":""}</span>`
+    +`<span class="cl-title">${esc(e.title||"")}</span><span class="cl-caret">›</span>`
+    +(chips?`<span class="cl-chips">${chips}</span>`:"")+`</div><div class="cl-body doc"></div></div>`;
+}
+function toggleCl(el){                               // 原地展开；原文第一次展开时才渲染
+  const open=!el.classList.contains("open");
+  el.classList.toggle("open",open);
+  const b=el.querySelector(".cl-body");
+  if(open&&!b.dataset.done){b.innerHTML=marked.parse((((_cl||{}).entries||[])[+el.dataset.i]||{}).md||"");b.dataset.done="1";}
 }
 
 /* ---- 速览 + 联网研究 ---- */
@@ -2048,6 +2121,10 @@ function loadCfg(){try{_cfg=JSON.parse(localStorage.getItem("intakeCfg")||"{}")|
 function saveCfg(){try{localStorage.setItem("intakeCfg",JSON.stringify(_cfg));}catch(e){}}
 function renderCfgBar(){
   const el=$("#mdlBar");if(!el||!_opts)return;
+  // 浏览器本地存的选择可能已不在列表里（2026-09-23 起 "opus" 别名换成了明确的模型 ID）。
+  // 不在就丢掉、回默认——否则下拉框看着是第一项，实际发出去的却还是那个旧值。
+  if(_cfg.model&&!_opts.models.some(x=>x.id===_cfg.model)){delete _cfg.model;saveCfg();}
+  if(_cfg.effort&&!_opts.efforts.some(x=>x.id===_cfg.effort)){delete _cfg.effort;saveCfg();}
   const m=_cfg.model||_opts.defaults.model,ef=_cfg.effort||_opts.defaults.effort;
   const mo=_opts.models.map(x=>`<option value="${esc(x.id)}"${x.id===m?" selected":""}>${esc(x.label)}</option>`).join("");
   const eo=_opts.efforts.map(x=>`<option value="${esc(x.id)}"${x.id===ef?" selected":""}>${esc(x.label)}</option>`).join("");
