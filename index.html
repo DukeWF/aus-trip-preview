@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="zh-CN">
 <head>
-<script>window.PREVIEW=true;window.BUILD="20260927235213"</script>
+<script>window.PREVIEW=true;window.BUILD="20260928001244"</script>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
 <title>2026·10 澳洲行 · 行程与价格监测</title>
@@ -486,6 +486,16 @@
   .om-note{color:var(--muted);font-size:12px;margin:4px 0}
   .om-full{font-size:12px;margin-left:8px}
   .om-map .leaflet-tile-pane{filter:saturate(.45) brightness(1.04) contrast(.92)}
+  /* ---- 按活动的天气结论（wxact） ---- */
+  .wxa-when{color:var(--muted);font-size:11px;font-weight:400;margin-left:8px}
+  .wxa-row{border-left:3px solid var(--line);padding:6px 10px;margin:6px 0;background:var(--panel2);border-radius:0 var(--r-sm) var(--r-sm) 0}
+  .wxa-row.lv-green{border-left-color:var(--good)}
+  .wxa-row.lv-yellow{border-left-color:var(--warn)}
+  .wxa-row.lv-red{border-left-color:var(--bad);background:var(--bad-bg)}
+  .wxa-meta{color:var(--muted);font-size:12px;margin-left:4px}
+  .wxa-why{font-size:13px;color:var(--fg2);margin-top:2px}
+  .wxa-adv{font-size:13px;margin-top:2px}
+  .wxa-dot{margin-left:4px;font-size:12px}
   :root[data-theme="dark"] .om-map .leaflet-tile-pane{filter:invert(1) hue-rotate(180deg) brightness(.85) contrast(.9) saturate(.4)}
   @media(prefers-color-scheme:dark){:root:not([data-theme="light"]) .om-map .leaflet-tile-pane{
     filter:invert(1) hue-rotate(180deg) brightness(.85) contrast(.9) saturate(.4)}}
@@ -953,6 +963,7 @@ function snapGet(u){                             // 把 GET /api/* 映射到 sna
   if(u==="/api/itinerary")return s.itinerary||{markdown:""};
   if(u==="/api/changelog")return s.changelog||{entries:[],stats:{}};
   if(u==="/api/routes")return s.routes||{routes:[]};
+  if(u==="/api/weather/activities")return s.wx_act||{items:[]};
   if(u==="/api/members")return s.members||[];
   if(u==="/api/days")return s.days||[];
   if(u==="/api/weather")return s.weather||{};
@@ -1169,7 +1180,7 @@ function switchTab(name){
   if(!PREVIEW&&name==="monitor"){$("#fetchAll").onclick=fetchAll;$("#addBtn").onclick=()=>openForm(null);}
   if(!PREVIEW&&name==="reflect"){$("#reflectRun").onclick=runReflect;$("#reflectRefresh").onclick=loadReflect;}
   if(!PREVIEW&&name==="shop"){const b=$("#shopRefresh");if(b)b.onclick=refreshShopping;}
-  if(name==="today"){loadRoutes().then(()=>loadToday(curDay));}
+  if(name==="today"){Promise.all([loadRoutes(),loadWxAct()]).then(()=>loadToday(curDay));}
   if(name==="crew")loadCrew();
   if(name==="bill")loadBill();
   if(name==="reflect")loadReflect();
@@ -1229,7 +1240,7 @@ async function loadToday(d){
       <button id="dToday">回到今天</button></div>`
     +t.index.map(x=>`<div class="dcard ${x.date===t.date?'active':''} ${x.date===t.today?'isnow':''}" data-d="${x.date}">
       <div class="dtop"><span class="dseq">D${(x.seq||0)+1}</span><span class="dttl">${esc(x.title)}</span>
-        <span class="risk ${x.weather_risk}">${(RISK_TXT[x.weather_risk]||'').slice(0,2)}</span></div>
+        <span class="risk ${x.weather_risk}">${(RISK_TXT[x.weather_risk]||'').slice(0,2)}</span>${wxaWorst(x.date)}</div>
       <div class="dsub">${x.date.slice(5)} · ${esc(x.city||'')}</div></div>`).join("");
   // 只有用户点选才弹出详情抽屉；开页 / 切回「今日」的程序性渲染不弹，否则一进页面列表就被盖住
   $("#dPick").onchange=e=>loadToday(e.target.value).then(()=>openDrawer("#dayDetail"));
@@ -1238,7 +1249,31 @@ async function loadToday(d){
   renderDay(t);
 }
 /* ---- 🗺 当天轨迹：OSM 小地图 + Google Maps 导航深链（线上此前一直为空：快照没带 routes） ---- */
-let _ROUTES=null,_ROUTES_OV=null;
+let _ROUTES=null,_ROUTES_OV=null,_WXA=null;
+const WXA_ICON={green:"🟢",yellow:"🟡",red:"🔴"},WXA_RANK={green:1,yellow:2,red:3};
+async function loadWxAct(){
+  if(_WXA)return _WXA;
+  try{_WXA=await api("/api/weather/activities");}catch(e){_WXA={items:[]};}
+  return _WXA;
+}
+function wxaOf(date){return ((_WXA||{}).items||[]).filter(x=>x.date===date);}
+function wxaWorst(date){                    // 日期列表上那一天最差的一级
+  const xs=wxaOf(date).filter(x=>x.level);
+  if(!xs.length)return "";
+  const w=xs.reduce((a,b)=>WXA_RANK[b.level]>WXA_RANK[a.level]?b:a);
+  return `<span class="wxa-dot" title="天气：${esc(w.why||"")}">${WXA_ICON[w.level]}</span>`;
+}
+function wxaHtml(date){
+  const xs=wxaOf(date);
+  if(!xs.length)return "";
+  const when=((_WXA||{}).generated_at||"").slice(5,16).replace("T"," ");
+  return `<fieldset class="wxa"><legend>🌦️ 天气结论（按活动）<span class="wxa-when">${esc(when)} 更新</span></legend>${xs.map(x=>`
+    <div class="wxa-row lv-${x.level||"none"}"><div class="wxa-head">${x.level?WXA_ICON[x.level]:"⚪"} <b>${esc(x.title)}</b>
+      <span class="wxa-meta">${esc(x.place)} · ${esc(x.hours)}${x.confidence?` · ${esc(x.confidence)}可信`:""}</span></div>
+      <div class="wxa-why">${esc(x.why||"")}</div>${x.advice?`<div class="wxa-adv">➜ ${esc(x.advice)}</div>`:""}
+      ${x.level==="red"&&x.operator?`<div class="wxa-adv">📞 ${esc(x.operator)}</div>`:""}</div>`).join("")}
+    <div class="om-note">门槛是经验值，停不停以运营商通知为准；离活动 8 天以上只看趋势。</div></fieldset>`;
+}
 async function loadRoutes(){
   if(_ROUTES)return _ROUTES;
   try{const r=await api("/api/routes");_ROUTES={};_ROUTES_OV=r.overview||null;(r.routes||[]).forEach(x=>{_ROUTES[x.date]=x;});}
@@ -1279,7 +1314,7 @@ function renderDay(t){
       <h2>${esc(d.title||'')}</h2></div>
     <div class="kv"><span>${d.date}</span><span>${esc(d.city||'')}</span></div>
     <p style="color:var(--muted);font-size:13px">${esc(d.summary||'')}</p>
-    ${wx}${plan}${sched}${routeHtml(d.date)}${fl}`;
+    ${wx}${wxaHtml(d.date)}${plan}${sched}${routeHtml(d.date)}${fl}`;
   if(document.getElementById("dayRoute"))omRenderDay("dayRoute",(_ROUTES||{})[d.date]);
 }
 function closeDayDetail(){closeDrawer();}   // 兼容旧调用
