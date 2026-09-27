@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="zh-CN">
 <head>
-<script>window.PREVIEW=true;window.BUILD="20260927142758"</script>
+<script>window.PREVIEW=true;window.BUILD="20260927235213"</script>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
 <title>2026·10 澳洲行 · 行程与价格监测</title>
@@ -13,6 +13,8 @@
 <meta name="apple-mobile-web-app-title" content="澳洲行" />
 <script src="vendor/echarts.min.js"></script>
 <script src="vendor/marked.min.js"></script>
+<link rel="stylesheet" href="vendor/leaflet/leaflet.min.css">
+<script src="vendor/leaflet/leaflet.min.js"></script>
 <style>
   /* ===== 设计令牌 · 腾讯 TDesign 风格（浅色为默认，深色可切） ===== */
   :root{
@@ -456,6 +458,37 @@
   .cl-body.doc{padding:4px 14px 12px;max-width:none;margin:0}
   .cl-item.open .cl-body{display:block}
   .cl-body table{display:block;overflow-x:auto;max-width:100%}
+  /* ---- 地图（OSM + Leaflet）：.om-*（.mp-* 已被价格页占用）。瓦片调淡，让编号点更显眼；深色模式反相调暗 ---- */
+  .om-wrap{max-width:900px;margin:0 auto;padding:8px 4px 24px}
+  .om-chips{display:flex;gap:6px;overflow-x:auto;padding:4px 2px 10px;scrollbar-width:none}
+  .om-chips::-webkit-scrollbar{display:none}
+  .om-chip{flex:0 0 auto;border:1px solid var(--line);background:var(--panel);color:var(--fg2);border-radius:14px;
+    padding:4px 11px;font-size:13px;cursor:pointer}
+  .om-chip.on{background:var(--accent);color:var(--on-accent);border-color:var(--accent)}
+  .om-title{font-weight:600;margin:2px 0 8px}
+  .om-seg{margin:0 0 14px}
+  .om-seghead{font-weight:600;color:var(--fg2);margin:6px 0}
+  .om-map{height:260px;border-radius:var(--r);overflow:hidden;border:1px solid var(--line);isolation:isolate;background:var(--panel2)}
+  .om-map.om-big{height:420px}
+  .om-list{list-style:none;margin:8px 0 4px;padding:0;font-size:13px}
+  .om-li{display:flex;align-items:center;gap:8px;padding:3px 0}
+  .om-li[data-k]{cursor:pointer}
+  .om-num{display:inline-flex;align-items:center;justify-content:center;width:22px;height:22px;flex:0 0 22px;border-radius:50%;
+    background:var(--accent);color:#fff;font-size:12px;font-weight:700;border:2px solid #fff;box-shadow:0 1px 3px rgba(0,0,0,.35)}
+  .om-num.om-dim{background:var(--muted)}
+  .om-home{display:inline-flex;align-items:center;justify-content:center;width:26px;height:26px;flex:0 0 26px;border-radius:50%;
+    background:var(--good);color:#fff;font-size:13px;border:2px solid #fff;box-shadow:0 1px 3px rgba(0,0,0,.35)}
+  .om-city{display:inline-block;white-space:nowrap;background:var(--panel);color:var(--fg);border:2px solid var(--accent);
+    border-radius:12px;padding:1px 8px;font-weight:600;font-size:12px;box-shadow:0 1px 3px rgba(0,0,0,.25);transform:translate(-50%,-50%)}
+  .om-off{color:var(--muted)}
+  .om-tip{color:var(--muted);font-size:11px;margin-left:auto}
+  .om-go{display:inline-block;font-size:13px;margin:2px 0 4px}
+  .om-note{color:var(--muted);font-size:12px;margin:4px 0}
+  .om-full{font-size:12px;margin-left:8px}
+  .om-map .leaflet-tile-pane{filter:saturate(.45) brightness(1.04) contrast(.92)}
+  :root[data-theme="dark"] .om-map .leaflet-tile-pane{filter:invert(1) hue-rotate(180deg) brightness(.85) contrast(.9) saturate(.4)}
+  @media(prefers-color-scheme:dark){:root:not([data-theme="light"]) .om-map .leaflet-tile-pane{
+    filter:invert(1) hue-rotate(180deg) brightness(.85) contrast(.9) saturate(.4)}}
   /* ---- 路线图 ---- */
   .mapwrap{max-width:1000px;margin:0 auto;padding:24px}
   .mapwrap img{width:100%;border:1px solid var(--line);border-radius:14px;background:var(--panel2)}
@@ -790,6 +823,14 @@
   <div class="doc" id="doc">加载中…</div>
 </div>
 
+<!-- ===== 地图（OSM：全程总览 + 按天切换；坐标 = geo.py 人工核对的点表） ===== -->
+<div class="view" id="view-map">
+  <div class="om-wrap">
+    <div class="om-chips" id="omChips"></div>
+    <div id="omBody">加载中…</div>
+  </div>
+</div>
+
 <!-- ===== 变更（行程变更时间线：数据 = itinerary/CHANGELOG.md 解析结果） ===== -->
 <div class="view" id="view-changes">
   <div class="cl-wrap">
@@ -911,6 +952,7 @@ function snapGet(u){                             // 把 GET /api/* 映射到 sna
   if(u==="/api/runs")return s.runs||[];
   if(u==="/api/itinerary")return s.itinerary||{markdown:""};
   if(u==="/api/changelog")return s.changelog||{entries:[],stats:{}};
+  if(u==="/api/routes")return s.routes||{routes:[]};
   if(u==="/api/members")return s.members||[];
   if(u==="/api/days")return s.days||[];
   if(u==="/api/weather")return s.weather||{};
@@ -1084,7 +1126,7 @@ if("serviceWorker" in navigator){window.addEventListener("load",()=>navigator.se
    现在按"这是同一件事的不同面"归组，组内切换走二级条。 */
 const GROUPS=[
   {k:"today",  views:[["today","今日"]]},
-  {k:"itin",   views:[["itin","正文"],["changes","变更"],["glance","速览"],["shop","买在澳洲"]]},
+  {k:"itin",   views:[["itin","正文"],["changes","变更"],["map","地图"],["glance","速览"],["shop","买在澳洲"]]},
   {k:"monitor",views:[["monitor","价格与决策"]]},
   {k:"intake", views:[["intake","录入"]]},
   /* 账单 / 分账已停用（用户 2026-09-21）：页签摘掉，端点也会 410。视图标记留着，
@@ -1135,6 +1177,7 @@ function switchTab(name){
   if(name==="intake")loadIntake();
   if(name==="itin")loadItinerary();
   if(name==="changes")loadChanges();
+  if(name==="map")loadMapPage();
   if(name==="glance"){if(!PREVIEW){$("#genCard").onclick=genCard;$("#runResearch").onclick=runResearch;}loadGlance();}
   if(name==="plan")loadPlan();
 }
@@ -1194,28 +1237,19 @@ async function loadToday(d){
   $("#dayList").querySelectorAll(".dcard").forEach(c=>c.onclick=()=>loadToday(c.dataset.d).then(()=>openDrawer("#dayDetail")));
   renderDay(t);
 }
-/* ---- 🗺 当天轨迹：跳转 Google Maps，不嵌地图（免 API key、静态站也能用） ---- */
-let _ROUTES=null;
+/* ---- 🗺 当天轨迹：OSM 小地图 + Google Maps 导航深链（线上此前一直为空：快照没带 routes） ---- */
+let _ROUTES=null,_ROUTES_OV=null;
 async function loadRoutes(){
   if(_ROUTES)return _ROUTES;
-  try{const r=await api("/api/routes");_ROUTES={};(r.routes||[]).forEach(x=>{_ROUTES[x.date]=x;});}
+  try{const r=await api("/api/routes");_ROUTES={};_ROUTES_OV=r.overview||null;(r.routes||[]).forEach(x=>{_ROUTES[x.date]=x;});}
   catch(e){_ROUTES={};}
   return _ROUTES;
 }
 function routeHtml(date){
   const r=(_ROUTES||{})[date];
   if(!r||!(r.segments||[]).length)return "";
-  // 转场日会有两段（上午在出发地、傍晚在目的地），各自一条路线——一天跨两个州时
-  // 合成一条链接必然有一半是错的
-  return `<fieldset><legend>🗺 当天轨迹</legend>${r.segments.map(g=>`
-    <div class="rt-seg">
-      <div class="rt-head">🏠 ${esc((g.stay||{}).name||"无住宿锚点")}${
-        r.segments.length>1?` <span class="badge">${esc(g.city||"")}</span>`:""}</div>
-      <div class="rt-stops">${g.stops.map((s,i)=>
-        `<span class="rt-stop">${i+1}. ${esc(s.label)}</span>`).join("")}</div>
-      ${g.url?`<a class="rt-go" href="${esc(g.url)}" target="_blank" rel="noopener">
-        在 Google Maps 打开这条路线 →</a>`:""}
-    </div>`).join("")}
+  return `<fieldset><legend>🗺 当天轨迹 <a class="om-full" href="javascript:void 0"
+      onclick="_omSel='${date}';switchTab('map')">全屏看地图 →</a></legend><div id="dayRoute"></div>
     ${(r.skipped||[]).length?`<div class="rt-skip">另有 ${r.skipped.length} 条没进轨迹（航班/接送/取行李这类不是地点）</div>`:""}
   </fieldset>`;
 }
@@ -1246,6 +1280,7 @@ function renderDay(t){
     <div class="kv"><span>${d.date}</span><span>${esc(d.city||'')}</span></div>
     <p style="color:var(--muted);font-size:13px">${esc(d.summary||'')}</p>
     ${wx}${plan}${sched}${routeHtml(d.date)}${fl}`;
+  if(document.getElementById("dayRoute"))omRenderDay("dayRoute",(_ROUTES||{})[d.date]);
 }
 function closeDayDetail(){closeDrawer();}   // 兼容旧调用
 
@@ -1676,6 +1711,93 @@ async function loadItinerary(){
   catch(e){$("#doc").innerHTML="加载失败："+e.message;}
   // 正文里写的是相对链接 [CHANGELOG.md](CHANGELOG.md)——站点上没有这个文件，点了就是 404；改成切到「变更」页
   $("#doc").querySelectorAll('a[href$="CHANGELOG.md"]').forEach(a=>a.onclick=ev=>{ev.preventDefault();switchTab("changes");});
+}
+
+/* ---- 地图：OSM + Leaflet。坐标 = geo.py 人工核对的点表（匹配不到的站不画，列表里标「未定位」）；
+   连线是游览顺序示意，不是实际路线——导航仍走 Google Maps 深链。测试可设 window.MAP_TILE_URL 换成本地空瓦片。 ---- */
+const OM_TILE=window.MAP_TILE_URL||"https://tile.openstreetmap.org/{z}/{x}/{y}.png";
+const OM_ATTR='&copy; <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a>';
+const _om={};                              // 容器 id → Leaflet 实例；重绘前先销毁，免得越积越多
+function omMap(id){
+  const old=_om[id];
+  if(old){                                 // 先断开尺寸监听再销毁：否则监听器还会对已销毁的地图重算尺寸而报错
+    try{old._omRO&&old._omRO.disconnect();old.stop();old.remove();}catch(e){}
+    delete _om[id];
+  }
+  const el=document.getElementById(id);
+  if(!el||!window.L)return null;
+  const m=L.map(el,{scrollWheelZoom:false,zoomControl:true});
+  L.tileLayer(OM_TILE,{maxZoom:18,attribution:OM_ATTR}).addTo(m);
+  m.attributionControl.setPrefix(false);
+  // 抽屉打开 / 页签切换时容器尺寸才定下来，不重算尺寸瓦片会错位
+  if(window.ResizeObserver){
+    m._omRO=new ResizeObserver(()=>{if(_om[id]===m&&m._loaded&&el.isConnected)m.invalidateSize();});
+    m._omRO.observe(el);
+  }
+  _om[id]=m;
+  return m;
+}
+const omNum=n=>L.divIcon({className:"",html:`<span class="om-num">${n}</span>`,iconSize:[24,24],iconAnchor:[12,12]});
+const omHome=()=>L.divIcon({className:"",html:`<span class="om-home">🏠</span>`,iconSize:[28,28],iconAnchor:[14,14]});
+function omSegHtml(id,g,multi){
+  let n=0;
+  const rows=g.stops.map(s=>s.lat!=null
+    ?`<li class="om-li" data-k="${++n}"><span class="om-num">${n}</span>${esc(s.label)}</li>`
+    :`<li class="om-li om-off"><span class="om-num om-dim">·</span>${esc(s.label)}<span class="om-tip">未定位</span></li>`).join("");
+  return `<div class="om-seg">${multi?`<div class="om-seghead">${esc(g.city||"")}</div>`:""}`
+    +(n?`<div class="om-map" id="${id}"></div>`:"")
+    +`<ol class="om-list">${g.stay?`<li class="om-li"><span class="om-home">🏠</span>${esc(g.stay.name)}（住处）</li>`:""}${rows}</ol>`
+    +(g.url?`<a class="om-go" href="${esc(g.url)}" target="_blank" rel="noopener">在 Google Maps 导航这条路线 →</a>`:"")
+    +`</div>`;
+}
+function omDrawSeg(id,g){
+  const m=omMap(id);
+  if(!m)return;
+  const pts=g.stops.filter(s=>s.lat!=null),home=g.stay_pt,ll=pts.map(s=>[s.lat,s.lng]);
+  const path=home?[[home.lat,home.lng],...ll,[home.lat,home.lng]]:ll;
+  if(path.length>1)L.polyline(path,{color:"#0052D9",weight:3,opacity:.7,dashArray:"2 7"}).addTo(m);
+  if(home)L.marker([home.lat,home.lng],{icon:omHome(),zIndexOffset:500}).addTo(m).bindTooltip(esc(home.name)+"（住处）");
+  const mk=pts.map((s,i)=>L.marker([s.lat,s.lng],{icon:omNum(i+1)}).addTo(m).bindTooltip(`${i+1}. ${esc(s.place||s.label)}`));
+  const b=home?[[home.lat,home.lng],...ll]:ll;
+  if(b.length===1)m.setView(b[0],14);else m.fitBounds(b,{padding:[26,26],maxZoom:15});
+  const seg=document.getElementById(id).closest(".om-seg");
+  seg.querySelectorAll(".om-li[data-k]").forEach(li=>li.onclick=()=>{
+    const x=mk[+li.dataset.k-1];m.setView(x.getLatLng(),Math.max(m.getZoom(),13));x.openTooltip();});
+}
+function omRenderDay(boxId,r){
+  const box=document.getElementById(boxId);
+  if(!box)return;
+  const segs=(r&&r.segments)||[];
+  if(!segs.length){box.innerHTML=`<div class="empty">这一天没有可画的地点（在途 / 航班日）</div>`;return;}
+  box.innerHTML=segs.map((g,i)=>omSegHtml(`${boxId}-m${i}`,g,segs.length>1)).join("")
+    +`<div class="om-note">连线是游览顺序示意（直线，不是实际路线）；导航请用 Google Maps。</div>`;
+  segs.forEach((g,i)=>{if(document.getElementById(`${boxId}-m${i}`))omDrawSeg(`${boxId}-m${i}`,g);});
+}
+function omRenderOverview(boxId,ov){
+  const box=document.getElementById(boxId);
+  box.innerHTML=`<div class="om-title">🗺 全程 · 3 城 9 晚 + 两段国内航班</div><div class="om-map om-big" id="${boxId}-ov"></div>
+    <div class="om-note">城市为住宿地；紫色虚线是国内航段示意（不是实际航迹）。点上方日期看每天的路线。</div>`;
+  const m=omMap(`${boxId}-ov`);
+  if(!m||!ov)return;
+  (ov.flights||[]).forEach(f=>L.polyline([f.a,f.b],{color:"#7C4DFF",weight:3,dashArray:"6 7"}).addTo(m).bindTooltip(esc(f.label)));
+  const cs=ov.cities||[];
+  cs.forEach(c=>L.marker([c.lat,c.lng],{icon:L.divIcon({className:"",iconSize:null,
+    html:`<span class="om-city">${esc(c.name)} · ${c.nights} 晚</span>`})}).addTo(m).bindTooltip(esc(c.dates)));
+  if(cs.length)m.fitBounds(cs.map(c=>[c.lat,c.lng]),{padding:[50,50]});
+}
+let _omSel="all";
+async function loadMapPage(sel){
+  if(sel)_omSel=sel;
+  const R=await loadRoutes();
+  const days=Object.values(R||{}).filter(r=>(r.segments||[]).length).sort((a,b)=>a.date<b.date?-1:1);
+  if(_omSel!=="all"&&!(R||{})[_omSel])_omSel="all";
+  const chips=[["all","全程"],...days.map(r=>[r.date,r.date.slice(5).replace("-",".")])];
+  $("#omChips").innerHTML=chips.map(([k,x])=>`<button class="om-chip${k===_omSel?" on":""}" data-k="${k}">${x}</button>`).join("");
+  $("#omChips").querySelectorAll(".om-chip").forEach(b=>b.onclick=()=>loadMapPage(b.dataset.k));
+  if(_omSel==="all"){omRenderOverview("omBody",_ROUTES_OV);return;}
+  const r=R[_omSel];
+  $("#omBody").innerHTML=`<div class="om-title">${esc(r.date.slice(5))} ${esc(r.title||"")}</div><div id="omDay"></div>`;
+  omRenderDay("omDay",r);
 }
 
 /* ---- 变更：行程变更时间线（数据 = itinerary/CHANGELOG.md 解析结果，线上走快照同名字段） ---- */
