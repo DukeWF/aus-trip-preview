@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="zh-CN">
 <head>
-<script>window.PREVIEW=true;window.BUILD="20261009052603"</script>
+<script>window.PREVIEW=true;window.BUILD="20261009061636"</script>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
 <title>2026·10 澳洲行 · 行程与价格监测</title>
@@ -678,6 +678,18 @@
   .cdown .cdown-n{font-size:20px;font-weight:700;color:var(--accent)}
   .wxbox{background:var(--panel2);border:1px solid var(--line);border-radius:10px;padding:9px 12px;margin:10px 0;font-size:13px}
   .wxbox .wxtag{font-size:11px;color:var(--muted);margin-left:6px}
+  .cc-sec{margin:10px 0 4px;font-size:12px;color:var(--muted);font-weight:600}
+  .cc-row{display:flex;gap:8px;align-items:flex-start;padding:8px 10px;border:1px solid var(--line);border-radius:9px;margin:6px 0;font-size:13px;line-height:1.55}
+  .cc-row .cc-x{flex:1;min-width:0}
+  .cc-row .cc-m{color:var(--muted);font-size:12px}
+  .cc-tag{flex:none;font-size:11px;padding:1px 7px;border-radius:999px;border:1px solid var(--line);color:var(--muted)}
+  .cc-row button{flex:none;font-size:12px;padding:3px 9px}
+  .cc-row.closed{opacity:.55}
+  .cc-ans{border:1px solid var(--line);border-radius:10px;padding:10px 12px;margin:8px 0;font-size:13px;line-height:1.65;overflow-wrap:anywhere}
+  .cc-ans table{border-collapse:collapse;max-width:100%;display:block;overflow-x:auto}
+  .cc-ans td,.cc-ans th{border:1px solid var(--line);padding:3px 6px}
+  .cc-prop{margin-top:8px;padding:8px 10px;border-radius:8px;background:var(--warn-bg);border:1px solid var(--warn-bd)}
+  .act-box{border:1px solid var(--line);border-radius:10px;padding:10px 12px;margin:10px 0;font-size:13px;line-height:1.65}
   .plan-box{border:1px solid var(--warn-bd);background:var(--warn-bg);border-radius:10px;padding:10px 12px;margin:10px 0;font-size:13px;line-height:1.65}
   .plan-box.crit{border-color:var(--bad-bd);background:var(--bad-bg)}
   .plan-box b{color:var(--warn)}
@@ -804,13 +816,20 @@
   <div class="intake-wrap">
     <div class="shead"><span class="bar"></span>🤖 AI 录入</div>
     <div class="intake-note">用大白话说要记什么 / 改什么，AI 解析成一次操作、你确认后才落库。<b>本地专用，不上线</b>。<br>
-      例：「大堡礁那天记得带防蜇衣」「把悉尼酒店目标价改成 600」「加个监测 悉尼到墨尔本机票」「10.6 早上 7 点去鱼市」</div>
+      例：「今天去了 Kiama」「明天墨尔本机场怎么进城？」「今天太赶了」「回程改成 CZ344」「今日页没更新」——
+      AI 会认出是<b>实际记录 / 问管家 / 偏好 / 改行程 / 工具问题</b>；前几类直接记下（可撤销），改行程要你确认。</div>
     <textarea id="intakeText" rows="3" placeholder="说点什么…（Ctrl/⌘+Enter 解析）"></textarea>
     <div class="intake-bar">
       <button class="primary" id="intakeParseBtn">🤖 解析</button>
       <button id="intakeClearBtn">清空</button>
     </div>
     <div id="intakeProposal"></div>
+    <div id="intakeExtras"></div>
+    <div class="shead" style="margin-top:26px"><span class="bar"></span>🧭 管家<span class="cnt" id="ccCnt"></span>
+      <button id="ccRefresh" class="proc-btn">↻ 刷新</button></div>
+    <div class="intake-note" style="margin-top:8px">AI 从你录入的话里认出的<b>实际情况 / 偏好 / 工具问题</b>直接记在这里（可删）；
+      问过管家的问题和建议也留着——采纳后进收件箱出方案，确认了才改行程。已结束的日子只记录、不再分析。</div>
+    <div id="ccPanel"></div>
     <div class="shead" style="margin-top:26px"><span class="bar"></span>📥 备忘收件箱<span class="cnt" id="memoCnt"></span>
       <button id="procBtn" class="proc-btn">🧠 规划全部待办</button></div>
     <div id="mdlBar" class="mdl-bar"></div>
@@ -1302,6 +1321,7 @@ function renderDay(t){
       ${(t.weather&&t.weather.kind==="climate")?`<span class="wxtag">还没进入预报窗口，这是历史同期均值、不是预报</span>`:""}</div>`:"";
   const crit=/🔴|硬冲突/.test(d.contingency||"");
   const plan=d.contingency?`<div class="plan-box ${crit?'crit':''}"><b>🧭 预案</b><br>${esc(d.contingency).replace(/\n/g,"<br>")}</div>`:"";
+  const acts=(t.actuals||[]).length?`<div class="act-box"><b>📝 实际</b>${t.actuals.map(a=>`<div>${CC_ST[a.status]||""} ${esc(a.text)}</div>`).join("")}</div>`:"";
   const sched=items.length?`<div class="sched">${items.map(i=>`<div class="srow">
       <span class="st">${esc(i.time||'')}</span><span class="sk ${i.kind||''}">${KIND_TXT[i.kind]||''}</span>
       <span class="sx">${esc(i.text||'')}${i.weather?' <span class="wsun">☂靠天</span>':''}${i.fixed?' <span class="wsun">⏰不可挪</span>':''}</span>
@@ -1319,7 +1339,7 @@ function renderDay(t){
       <h2>${esc(d.title||'')}</h2></div>
     <div class="kv"><span>${d.date}</span><span>${esc(d.city||'')}</span></div>
     <p style="color:var(--muted);font-size:13px">${esc(d.summary||'')}</p>
-    ${wx}${wxaHtml(d.date)}${plan}${sched}${routeHtml(d.date)}${fl}`;
+    ${wx}${wxaHtml(d.date)}${acts}${plan}${sched}${routeHtml(d.date)}${fl}`;
   if(document.getElementById("dayRoute"))omRenderDay("dayRoute",(_ROUTES||{})[d.date]);
 }
 function closeDayDetail(){closeDrawer();}   // 兼容旧调用
@@ -1716,8 +1736,8 @@ const TICKET_CK=[["已出票 · 立即核对",[
   ["name","姓名拼音与**护照完全一致**（含中间名/顺序）——不一致改名费高昂甚至作废"],
   ["ppt","全员护照效期 ≥ **回国日+6个月**（≥2027.4.12）"],
   ["bag","**捷星 JQ838 / JQ833 基础票价不含托运**，确认已加购每程行李（机场买贵一倍以上）"],
-  ["conn","10.11 **20:45 起飞**：当天 14:00 前必须离开市区（企鹅已移到 10.10）"],
-  ["hk","10.12 海口中转约 8h：确认是否需要过夜房/行李寄存"]]],
+  ["conn","10.11 **22:00 起飞**（CZ344）：最晚 18:30 在南十字站上 SkyBus（企鹅已移到 10.10）"],
+  ["hk","10.12 广州转机约 2h（05:00→07:00）：值机时问清行李能否直挂上海"]]],
  ["出发前 2–4 周",[
   ["visa","🛂 **澳洲签证 600 类**已获批且信息与护照一致"],
   ["peng","🐧 **10.10 企鹅归巢**门票（penguins.org.au，放票即订，周六易满）"],
@@ -2224,7 +2244,8 @@ async function refreshShopping(){
 }
 
 /* ---- 🤖 AI 录入：自然语言 → 提案 → 确认 → 落库（本地专用） ---- */
-const INTENT_CN={day_item:"加行程条目",watch_target:"改目标价",watch_add:"加监测项",memo:"记备忘"};
+const INTENT_CN={day_item:"加行程条目",watch_target:"改目标价",watch_add:"加监测项",memo:"记备忘",
+  actual:"实际记录",pref:"偏好",tool:"工具反馈",ask:"问管家",change:"改行程"};
 let _proposal=null;
 /* ---------- AI 写入：登记表 + 最近改动（后端 ai_ops.py） ----------
    哪些面 AI 能直接写、哪些只出方案，**以后端登记表为准**——前端只如实显示，不自己判断，
@@ -2264,7 +2285,8 @@ async function loadAiChanges(){
   el.querySelectorAll(".chg-undo").forEach(b=>b.onclick=()=>undoChange(b.dataset.c,b));
 }
 function loadIntake(){
-  loadOps();loadAiChanges();                 // 登记表（缓存一次）与「最近 AI 改动」面板
+  loadOps();loadAiChanges();loadConcierge();  // 登记表（缓存一次）、「最近 AI 改动」与管家面板
+  const ccr=$("#ccRefresh");if(ccr)ccr.onclick=loadConcierge;
   const cr=$("#chgRefresh");if(cr)cr.onclick=loadAiChanges;
   const b=$("#intakeParseBtn");if(b)b.onclick=intakeParse;
   const c=$("#intakeClearBtn");if(c)c.onclick=()=>{$("#intakeText").value="";$("#intakeProposal").innerHTML="";_proposal=null;};
@@ -2411,7 +2433,8 @@ function renderJobs(){
   clearInterval(_procTick);_procTick=null;
   el.querySelectorAll(".pr-log").forEach(d=>{_logOpen[d.dataset.job]=d.open;});
   const run=_JOBS.filter(j=>j.state!=="done");
-  const done=_JOBS.filter(j=>j.state==="done"&&!_hidden.has(j.id)).slice(0,3);
+  // 问管家的结果在「管家」面板里看，这里只显示它的进度，不当成「执行结果」
+  const done=_JOBS.filter(j=>j.state==="done"&&!_hidden.has(j.id)&&j.kind!=="concierge_ask").slice(0,3);
   el.innerHTML=run.map(progressHtml).join("")+done.map(jobResultHtml).join("");
   el.querySelectorAll(".pr-lines").forEach(b=>{b.scrollTop=b.scrollHeight;});
   el.querySelectorAll(".pr-log").forEach(d=>{d.ontoggle=()=>{_logOpen[d.dataset.job]=d.open;};});
@@ -2507,7 +2530,10 @@ async function intakeParse(){
   const t=($("#intakeText").value||"").trim();if(!t){toast("先输入点内容",false);return;}
   const b=$("#intakeParseBtn");b.disabled=true;b.textContent="🤖 解析中…";
   try{_proposal=await api("/api/intake/parse",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({text:t})});
+    $("#intakeExtras").innerHTML="";
+    const ex=(_proposal&&_proposal.extras)||[];
     renderProposal(_proposal);
+    if(ex.length)applyExtras(ex);
   }catch(e){toast("解析失败："+(e.message||e),false);}
   finally{b.disabled=false;b.textContent="🤖 解析";}
 }
@@ -2516,9 +2542,11 @@ function renderProposal(p){
   const rows=Object.entries(p.params||{}).filter(([k])=>k!=="text"||p.intent==="memo")
     .map(([k,v])=>`<div class="pp-row"><span class="pp-k">${esc(k)}</span><span>${esc(v==null?"":String(v))}</span></div>`).join("");
   const spec=opOf(p.intent);                      // 登记表里这个操作属于哪个面、能不能直接写
-  const direct=!spec||spec.policy==="direct";     // 表里没有的（老提案）按可执行走，后端仍会独立再判一次
+  const auto=!!spec&&spec.policy==="auto"&&p.intent!=="ask";   // 管家记录：识别出来就写（可撤销）
+  const isAsk=p.intent==="ask",isChange=p.intent==="change";
+  const direct=!spec||spec.policy==="direct"||spec.policy==="auto";     // 表里没有的（老提案）按可执行走，后端仍会独立再判一次
   const pol=spec?`<div class="p-policy">
-      <span class="p-pol ${direct?"direct":"propose"}">${direct?"✅ 确认后可直接写":"📋 只出方案，不代改"}</span>
+      <span class="p-pol ${direct?"direct":"propose"}">${isAsk?"🔎 只读，可联网查":auto?"⚡ 识别出来直接记（可撤销）":isChange?"📥 进收件箱出方案，确认后才改":direct?"✅ 确认后可直接写":"📋 只出方案，不代改"}</span>
       <span class="p-conf">${esc(spec.surface_cn)}${direct&&spec.undoable?" · 可撤销":""}</span></div>`:"";
   el.innerHTML=`<div class="proposal ${esc(p.intent)}">
     <div class="p-head"><span class="p-tag">${esc((spec&&spec.label)||INTENT_CN[p.intent]||p.intent)}</span>
@@ -2527,17 +2555,95 @@ function renderProposal(p){
     ${rows?`<div class="p-params">${rows}</div>`:""}
     ${p.note?`<div class="p-note">⚠️ ${esc(p.note)}</div>`:""}
     ${pol}
-    <div class="p-actions">${direct
-      ?`<button class="primary" id="intakeApplyBtn">✅ 确认执行</button>`
+    <div class="p-actions">${isAsk
+      ?`<button class="primary" id="intakeAskBtn">🧭 问管家</button>`
+      :direct
+      ?`<button class="primary" id="intakeApplyBtn">${isChange?"📥 进收件箱并出方案":"✅ 确认执行"}</button>`
       :`<button class="primary" id="intakeMemoBtn">📥 记成备忘（待人工处理）</button>`}
       <button id="intakeCancelBtn">取消</button></div></div>`;
   const ab=$("#intakeApplyBtn");if(ab)ab.onclick=intakeApply;
+  const kb=$("#intakeAskBtn");if(kb)kb.onclick=intakeAsk;
+  if(auto)intakeApply();                          // 实际 / 偏好 / 工具反馈：用户 2026-10-08 定为不经确认直接记
   // 只出方案的面（同行 / 账单）：不给"执行"，转成一条备忘，人自己去那一页动手
   const mb=$("#intakeMemoBtn");if(mb)mb.onclick=()=>{
     const t=(p.summary||p._raw||"")+"（AI 不代改，需人工到对应页面处理）";
     _proposal={intent:"memo",params:{text:t},summary:t,confidence:1};
     intakeApply();};
   $("#intakeCancelBtn").onclick=()=>{el.innerHTML="";_proposal=null;};
+}
+async function applyExtras(ex){
+  try{const r=await api("/api/intake/extras",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({extras:ex})});
+    const ok=(r.results||[]).filter(x=>x&&x.ok);
+    if(!ok.length)return;
+    $("#intakeExtras").innerHTML=ok.map(x=>`<div class="p-done"><span style="flex:1">⚡ 顺手记下：${esc(x.message||"")}</span>
+      ${x.undoable&&x.change_id?`<button class="chg-undo ex-undo" data-c="${x.change_id}">↩ 撤销</button>`:""}</div>`).join("");
+    $("#intakeExtras").querySelectorAll(".ex-undo").forEach(b=>b.onclick=async()=>{await undoChange(b.dataset.c,b);b.closest(".p-done").remove();loadConcierge();});
+    loadConcierge();loadAiChanges();
+  }catch(e){}
+}
+async function intakeAsk(){
+  if(!_proposal)return;
+  const q=(_proposal.params||{}).question||_proposal._raw||"";
+  const b=$("#intakeAskBtn");if(b){b.disabled=true;b.textContent="管家在查…";}
+  let r;try{r=await api("/api/intake/apply",{method:"POST",headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({intent:"ask",params:{question:q}})});}catch(e){toast("问不了："+(e.message||e),false);return;}
+  const jid=r&&r.job&&r.job.id;if(!jid){toast((r&&r.message)||"没起来",false);if(b){b.disabled=false;b.textContent="🧭 问管家";}return;}
+  $("#intakeText").value="";
+  const el=$("#intakeProposal");
+  el.innerHTML=`<div class="cc-ans">🧭 管家在查「${esc(q)}」…（联网查一般 1–3 分钟，可以先去别的页，回来在下面「管家」里看）</div>`;
+  const tick=async()=>{
+    let s;try{s=await api("/api/intake/jobs");}catch(e){setTimeout(tick,4000);return;}
+    const j=(s.jobs||[]).find(x=>x.id===jid);
+    if(!j||j.state!=="done"){setTimeout(tick,3000);return;}
+    const res=j.result||{};
+    if(!res.ok){el.innerHTML=`<div class="cc-ans">⚠️ ${esc(res.note||"管家没答上来")}</div>`;return;}
+    el.innerHTML=ansHtml(q,res.answer,res.proposal,res.id,"open");wireAns(el);loadConcierge();
+  };
+  setTimeout(tick,3000);
+}
+function ansHtml(q,answer,proposal,id,status){
+  return `<div class="cc-ans"><div class="cc-m">🧭 问：${esc(q||"")}</div>${marked.parse(answer||"")}
+    ${proposal?`<div class="cc-prop">💡 建议改动：${esc(proposal)}<br>
+      ${status==="adopted"?`<span class="cc-m">✅ 已采纳，进了收件箱</span>`
+        :`<button class="primary cc-adopt" data-id="${id}" style="margin-top:6px">📥 采纳进行程（先出方案，确认才改）</button>`}</div>`:""}</div>`;
+}
+function wireAns(root){
+  root.querySelectorAll(".cc-adopt").forEach(b=>b.onclick=async()=>{
+    b.disabled=true;b.textContent="提交中…";
+    try{const r=await api(`/api/concierge/${b.dataset.id}/adopt`,{method:"POST"});
+      toast(r.message||(r.ok?"已采纳":"失败"),!!r.ok);if(r.ok){b.outerHTML=`<span class="cc-m">✅ 已采纳，进了收件箱</span>`;renderMemos();pollJobs();loadConcierge();}
+      else{b.disabled=false;b.textContent="📥 采纳进行程";}
+    }catch(e){toast("失败："+(e.message||e),false);b.disabled=false;}});
+}
+const CC_ST={done:"✅",skipped:"⏭️",changed:"🔀"};
+async function loadConcierge(){
+  const el=$("#ccPanel");if(!el||PREVIEW)return;
+  let c;try{c=await api("/api/concierge");}catch(e){el.innerHTML="";return;}
+  const md=s=>s?`${+s.slice(5,7)}.${+s.slice(8,10)}`:"";
+  const prefs=c.prefs||[],tools=c.tools||[],acts=c.actuals||[],asks=c.asks||[];
+  $("#ccCnt").textContent=prefs.length+tools.filter(t=>t.status==="open").length+acts.length+asks.length||"";
+  const row=(tag,body,meta,btns,cls)=>`<div class="cc-row ${cls||""}"><span class="cc-tag">${tag}</span>
+    <div class="cc-x">${body}${meta?`<div class="cc-m">${meta}</div>`:""}</div>${btns||""}</div>`;
+  const del=id=>`<button class="cc-del" data-id="${id}">✕</button>`;
+  const pt=c.patrol||{};
+  el.innerHTML=
+    (pt.brief?`<div class="cc-sec">🧭 最近一次巡检（${pt.slot==="morning"?"早间":"晚间"} · 看 ${md(pt.focus)} · ${esc((pt.at||"").slice(5,16).replace("T"," "))}）</div>
+      <div class="cc-ans">${marked.parse(pt.brief)}${pt.n_props?`<div class="cc-m">💡 ${pt.n_props} 条建议在下面「最近问过管家」里，点开可采纳</div>`:""}</div>`:"")+
+    `<div class="cc-sec">🧠 偏好画像（${prefs.length}）</div>`+
+    (prefs.map(p=>row(esc((c.topics||{})[p.meta.topic]||"其它"),esc(p.text),p.meta.evidence?"原话："+esc(p.meta.evidence):"",del(p.id))).join("")||`<div class="cc-m">还没有——旅途中随口说的「太赶了」「这个很值」都会被记进来</div>`)+
+    `<div class="cc-sec">📝 实际记录（${acts.length}）</div>`+
+    (acts.map(a=>row(md(a.date),(CC_ST[a.status]||"")+" "+esc(a.text),"",del(a.id))).join("")||`<div class="cc-m">还没有</div>`)+
+    `<div class="cc-sec">🛠️ 工具待办（${tools.filter(t=>t.status==="open").length} 未关）</div>`+
+    (tools.map(t=>row(t.status==="open"?"未关":"已关",esc(t.text),[t.meta.where,t.meta.note].filter(Boolean).map(esc).join(" · "),
+      (t.status==="open"?`<button class="cc-close" data-id="${t.id}">✓ 关</button>`:"")+del(t.id),t.status==="open"?"":"closed")).join("")||`<div class="cc-m">没有</div>`)+
+    `<div class="cc-sec">🔎 管家问答与建议（${asks.length}）</div>`+
+    (asks.map(a=>`<details class="cc-row" style="display:block"><summary>${esc(a.text)} <span class="cc-m">· ${esc((a.created_at||"").slice(5,16).replace("T"," "))}${a.status==="adopted"?" · 已采纳":""}</span></summary>
+      ${ansHtml(a.text,a.meta.answer,a.meta.proposal,a.id,a.status)}</details>`).join("")||`<div class="cc-m">还没问过</div>`);
+  el.querySelectorAll(".cc-del").forEach(b=>b.onclick=async()=>{
+    if(!await confirmDialog("删掉这条管家记录？",{title:"删除",okText:"删除",danger:true}))return;
+    await api(`/api/concierge/${b.dataset.id}`,{method:"DELETE"});loadConcierge();});
+  el.querySelectorAll(".cc-close").forEach(b=>b.onclick=async()=>{await api(`/api/concierge/${b.dataset.id}/close`,{method:"POST"});loadConcierge();});
+  wireAns(el);
 }
 async function intakeApply(){
   if(!_proposal)return;
@@ -2547,7 +2653,8 @@ async function intakeApply(){
   try{const r=await api("/api/intake/apply",{method:"POST",headers:{"Content-Type":"application/json"},
       body:JSON.stringify({intent:_proposal.intent,params:_proposal.params||{}})});
     if(r&&r.ok){
-      toast(r.message||"已执行");$("#intakeText").value="";_proposal=null;renderMemos();loadAiChanges();
+      toast(r.message||"已执行");$("#intakeText").value="";_proposal=null;renderMemos();loadAiChanges();loadConcierge();
+      if(r.plan)pollJobs();
       // 不直接清空：留一张"刚做了什么 + 撤销"的小卡，手机上也不用滚到下面的账本里找
       $("#intakeProposal").innerHTML=`<div class="p-done"><span style="flex:1">✅ ${esc(r.message||"已执行")}</span>
         ${r.undoable&&r.change_id?`<button class="chg-undo" id="undoLast" data-c="${r.change_id}">↩ 撤销</button>`:""}</div>`;
@@ -2943,6 +3050,8 @@ async function loadPlanChip(){
   }catch(e){el.hidden=true;}
 }
 (async()=>{ if(PREVIEW){await loadSnapshot();if(!(SNAP||{})._fromCache)checkStale();} switchTab("today"); skeleton(); await refresh(); loadAppVersion(); loadPlanChip(); pollJobBar();
+  const tab=new URLSearchParams(location.search).get("tab");   // 深链 ?tab=intake：飞书管家卡「去确认」直达录入页
+  if(tab&&!PREVIEW&&document.querySelector(`.tab[data-tab="${tab}"]`))switchTab(tab);
   const w=+new URLSearchParams(location.search).get("w");   // 深链 ?w=<id> 直达某监测项（移动端亦可分享）
   if(w&&watches.some(x=>x.id===w))selectWatch(w,true);
 })();
